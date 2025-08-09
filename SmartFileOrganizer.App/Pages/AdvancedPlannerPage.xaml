@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"  
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"  
+             xmlns:ctrls="clr-namespace:SmartFileOrganizer.App.Pages.Controls"  
+             x:Class="SmartFileOrganizer.App.Pages.AdvancedPlannerPage"  
+             Title="Advanced Planner">  
+    <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,*"  
+        Padding="16" ColumnSpacing="16" RowSpacing="8">  
+        <Label Grid.ColumnSpan="2" Text="Drag files from your current structure (left) onto the destination folders (right). The AI will follow your changes." />  
+        <!-- Breadcrumbs -->  
+        <VerticalStackLayout Grid.Row="1" Grid.Column="0" Spacing="6">  
+            <Label Text="Current selection:" FontAttributes="Bold" />  
+            <Label Text="{Binding CurrentBreadcrumb}" FontSize="12" LineBreakMode="TailTruncation" />  
+            <ctrls:CurrentTreeView />  
+        </VerticalStackLayout>  
+
+        <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="6">  
+            <Label Text="Destination selection:" FontAttributes="Bold" />  
+            <Label Text="{Binding DestinationBreadcrumb}" FontSize="12" LineBreakMode="TailTruncation" />  
+            <ctrls:PlanTreeView />  
+        </VerticalStackLayout>  
+
+        <Button Grid.Row="2" Grid.ColumnSpan="2" Text="Save &amp; Close" Clicked="OnSave" />  
+    </Grid>  
+</ContentPage>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView
+    x:Class="SmartFileOrganizer.App.Pages.Controls.PlanTreeView"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit">
+
+    <ContentView.Resources>
+        <!-- Node template used recursively -->
+        <DataTemplate x:Key="NodeTemplate">
+            <Grid Padding="6" ColumnDefinitions="*,Auto">
+                <!-- Folder as Expander -->
+                <toolkit:Expander IsExpanded="False" IsVisible="{Binding IsFolder}">
+                    <toolkit:Expander.Header>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnTapped" />
+                                <DragGestureRecognizer CanDrag="True" DragStarting="OnDragStarting" />
+                                <DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
+                            </Grid.GestureRecognizers>
+
+                            <Label Text="{Binding Name}" />
+                            <Label Grid.Column="1"
+                                   Text="{Binding FileCount, StringFormat='({0} files)'}"
+                                   IsVisible="{Binding IsFolder}" />
+                        </Grid>
+                    </toolkit:Expander.Header>
+
+                    <!-- Children -->
+                    <CollectionView ItemsSource="{Binding Children}" SelectionMode="None" Margin="20,0,0,0">
+                        <CollectionView.ItemTemplate>
+                            <StaticResource Key="NodeTemplate" />
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </toolkit:Expander>
+
+                <!-- File (no expander) -->
+                <ContentView IsVisible="{Binding IsFolder, Converter={StaticResource InverseBoolConverter}}">
+                    <ContentView.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnTapped" />
+                        <DragGestureRecognizer CanDrag="True" DragStarting="OnDragStarting" />
+                        <DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
+                    </ContentView.GestureRecognizers>
+
+                    <Label Text="{Binding Name}" />
+                </ContentView>
+            </Grid>
+        </DataTemplate>
+    </ContentView.Resources>
+
+    <Grid>
+        <!-- Root of the destination tree -->
+        <CollectionView ItemsSource="{Binding DestinationRoot}" SelectionMode="None">
+            <CollectionView.ItemTemplate>
+                <StaticResource Key="NodeTemplate" />
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentView>

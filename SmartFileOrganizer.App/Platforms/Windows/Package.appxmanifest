@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  IgnorableNamespaces="uap">
+
+	<!-- Identity must match your signing cert publisher and be unique -->
+	<Identity Name="com.sfo.app"
+			  Publisher="CN=Smart File Organizer Dev"
+			  Version="1.0.0.0" />
+
+	<Properties>
+		<DisplayName>Smart File Organizer</DisplayName>
+		<PublisherDisplayName>Smart File Organizer</PublisherDisplayName>
+		<Logo>Assets\StoreLogo.png</Logo>
+	</Properties>
+
+	<Dependencies>
+		<TargetDeviceFamily Name="Windows.Universal"
+							MinVersion="10.0.19041.0"
+							MaxVersionTested="10.0.22621.0" />
+	</Dependencies>
+
+	<Resources>
+		<Resource Language="en-us" />
+	</Resources>
+
+	<Applications>
+		<!-- MAUI uses tokens here; don't change Executable/EntryPoint -->
+		<Application Id="App"
+					 Executable="$targetnametoken$.exe"
+					 EntryPoint="$targetentrypoint$">
+			<uap:VisualElements
+				DisplayName="Smart File Organizer"
+				Description="Organize and clean your files"
+				BackgroundColor="transparent"
+				Square150x150Logo="Assets\Square150x150Logo.png"
+				Square44x44Logo="Assets\Square44x44Logo.png">
+				<uap:DefaultTile Square71x71Logo="Assets\Square71x71Logo.png" />
+			</uap:VisualElements>
+		</Application>
+	</Applications>
+
+	<Capabilities>
+		<!-- Start minimal. You'll manage files in user folders chosen in the app. -->
+		<uap:Capability Name="internetClient" />
+	</Capabilities>
+</Package>

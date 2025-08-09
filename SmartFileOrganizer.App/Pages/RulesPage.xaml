@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="SmartFileOrganizer.App.Pages.RulesPage"
+    Title="Rules">
+    <VerticalStackLayout Padding="16" Spacing="10">
+        <Label Text="User Rules (applied before AI)" FontSize="20" FontAttributes="Bold"/>
+
+        <CollectionView x:Name="RulesList" SelectionMode="Single" ItemsSource="{Binding Rules}">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Frame Padding="10" Margin="0,6" BorderColor="#00000018" CornerRadius="10">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+                            <Entry Grid.ColumnSpan="2" Text="{Binding Name}" Placeholder="Rule name"/>
+
+                            <Entry Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Pattern}" Placeholder="Pattern (e.g., *.pdf or **/Invoices/*.pdf)"/>
+
+                            <HorizontalStackLayout Grid.Row="2" Spacing="8">
+                                <Switch IsToggled="{Binding MatchFullPath}"/>
+                                <Label Text="Match full path"/>
+                                <Switch IsToggled="{Binding Enabled}"/>
+                                <Label Text="Enabled"/>
+                                <Label Text="Priority:"/>
+                                <Entry WidthRequest="70" Keyboard="Numeric" Text="{Binding Priority}"/>
+                            </HorizontalStackLayout>
+
+                            <!-- Action -->
+                            <Picker Grid.Row="3" Title="Action" SelectedIndex="{Binding ActionIndex}">
+                                <Picker.Items>
+                                    <x:String>Move to folder</x:String>
+                                    <x:String>Ignore</x:String>
+                                </Picker.Items>
+                            </Picker>
+
+                            <!-- Destination + Browse (visible only when action is Move) -->
+                            <Grid Grid.Row="4" ColumnDefinitions="*,Auto" IsVisible="{Binding IsMove}">
+                                <Entry Text="{Binding DestinationFolder}" Placeholder="Destination folder"/>
+                                <Button Grid.Column="1" Text="Browse�" Clicked="OnBrowseDestination" CommandParameter="{Binding .}"/>
+                            </Grid>
+
+                            <!-- Grouping options -->
+                            <HorizontalStackLayout Grid.Row="5" Spacing="12" IsVisible="{Binding IsMove}">
+                                <Switch IsToggled="{Binding GroupByYear}"/>
+                                <Label Text="Group by Year"/>
+                                <Switch IsToggled="{Binding GroupByYearMonth}"/>
+                                <Label Text="Group by Year/Month"/>
+                            </HorizontalStackLayout>
+
+                            <!-- Scopes (per-rule roots) -->
+                            <VerticalStackLayout Grid.Row="6" Spacing="6">
+                                <Label Text="Scopes (apply only within these roots; empty = all roots)" FontAttributes="Bold" FontSize="12"/>
+                                <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center">
+                                    <CollectionView ItemsSource="{Binding Scopes}" ItemsLayout="HorizontalList">
+                                        <CollectionView.ItemTemplate>
+                                            <DataTemplate>
+                                                <Frame Padding="6" Margin="4" BackgroundColor="#00000010" CornerRadius="10">
+                                                    <HorizontalStackLayout Spacing="6">
+                                                        <Label Text="{Binding .}" LineBreakMode="TailTruncation"/>
+                                                        <Button Text="�"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveScopeCommand}"
+                                    CommandParameter="{Binding .}" Padding="0"/>
+                                                    </HorizontalStackLayout>
+                                                </Frame>
+                                            </DataTemplate>
+                                        </CollectionView.ItemTemplate>
+                                    </CollectionView>
+                                </FlexLayout>
+                                <Button Text="Add scope�" Clicked="OnAddScope" CommandParameter="{Binding .}" />
+                            </VerticalStackLayout>
+
+                            <Button Grid.ColumnSpan="2" Grid.Row="7" Text="Delete"
+                      Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DeleteRuleCommand}"
+                      CommandParameter="{Binding .}"/>
+                        </Grid>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <HorizontalStackLayout Spacing="10">
+            <Button Text="Add rule" Clicked="OnAdd"/>
+            <Button Text="Save" Clicked="OnSave"/>
+            <Button Text="Test rules�" Clicked="OnTest"/>
+            <Button Text="Close" Clicked="OnClose"/>
+        </HorizontalStackLayout>
+    </VerticalStackLayout>
+</ContentPage>

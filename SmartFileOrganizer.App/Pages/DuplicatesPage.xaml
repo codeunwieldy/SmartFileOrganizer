@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="SmartFileOrganizer.App.Pages.DuplicatesPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:SmartFileOrganizer.App.Pages"
+    xmlns:conv="clr-namespace:SmartFileOrganizer.App.Converters"
+    x:Name="Root"
+    Title="Duplicates">
+
+	<ContentPage.Resources>
+		<conv:EqualityConverter x:Key="EqualityConverter" />
+	</ContentPage.Resources>
+
+	<VerticalStackLayout Padding="16" Spacing="10">
+		<Label Text="Detected duplicate files" FontSize="20" FontAttributes="Bold" />
+		<Label x:Name="Summary" FontSize="12" />
+
+		<!-- Bind to your ViewGroups collection -->
+		<CollectionView x:Name="Groups" ItemsSource="{Binding ViewGroups}">
+			<CollectionView.ItemTemplate>
+				<DataTemplate>
+					<Frame Padding="8" Margin="0,6" BorderColor="#33000000" CornerRadius="10">
+						<VerticalStackLayout Spacing="4">
+							<Label Text="{Binding Header}" FontAttributes="Bold" />
+							<CollectionView ItemsSource="{Binding Items}">
+								<CollectionView.ItemTemplate>
+									<DataTemplate>
+										<Grid ColumnDefinitions="*,Auto">
+											<Label Text="{Binding .}" LineBreakMode="MiddleTruncation" />
+											<Button Grid.Column="1"
+                                                    Text="Keep here"
+                                                    Command="{Binding Source={x:Reference Root}, Path=BindingContext.MarkKeepHereCommand}"
+                                                    CommandParameter="{Binding .}" />
+										</Grid>
+									</DataTemplate>
+								</CollectionView.ItemTemplate>
+							</CollectionView>
+						</VerticalStackLayout>
+					</Frame>
+				</DataTemplate>
+			</CollectionView.ItemTemplate>
+		</CollectionView>
+
+		<!-- Resolution policy -->
+		<Frame Padding="10" BorderColor="#33000000" CornerRadius="10">
+			<VerticalStackLayout Spacing="8">
+				<Label Text="Resolution policy" FontAttributes="Bold" />
+
+				<Picker x:Name="PolicyPicker" Title="Choose a policy">
+					<Picker.Items>
+						<x:String>Move others next to kept file</x:String>
+						<x:String>Replace others with hardlinks to kept file</x:String>
+						<x:String>Move others to Archive folder</x:String>
+					</Picker.Items>
+				</Picker>
+
+				<!-- Archive row visible only for policy index == 2 -->
+				<Grid ColumnDefinitions="*,Auto"
+                      IsVisible="{Binding Source={x:Reference PolicyPicker}, Path=SelectedIndex, Converter={StaticResource EqualityConverter}, ConverterParameter=2}">
+					<Entry x:Name="ArchivePathBox" Placeholder="Archive folder" IsReadOnly="True" />
+					<Button Grid.Column="1" Text="Browse…" Clicked="OnPickArchive" />
+				</Grid>
+
+				<HorizontalStackLayout Spacing="10">
+					<Button Text="Apply" Clicked="OnApply" />
+					<Button Text="Skip (do nothing)" Clicked="OnSkip" />
+				</HorizontalStackLayout>
+			</VerticalStackLayout>
+		</Frame>
+	</VerticalStackLayout>
+</ContentPage>

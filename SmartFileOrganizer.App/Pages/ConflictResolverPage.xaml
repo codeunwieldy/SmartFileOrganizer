@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="SmartFileOrganizer.App.Pages.ConflictResolverPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:SmartFileOrganizer.App.Pages">
+
+	<ContentPage.Resources>
+		<local:ConflictChoiceToIndexConverter x:Key="ChoiceToIndex" />
+		<local:EnumEqualsConverter x:Key="EnumEquals" />
+	</ContentPage.Resources>
+
+	<VerticalStackLayout Padding="16" Spacing="10">
+		<Label Text="Some destinations already exist. Choose how to resolve each item." />
+
+		<!-- List of conflicts -->
+		<CollectionView
+            x:Name="ConflictsList"
+            ItemsSource="{Binding Items}"
+            SelectionMode="Single"
+            SelectedItem="{Binding SelectedRow, Mode=TwoWay}">
+			<CollectionView.ItemTemplate>
+				<DataTemplate>
+					<Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+						<Label Grid.Row="0" Grid.ColumnSpan="2"
+                               Text="{Binding Destination}"
+                               FontAttributes="Bold" />
+						<Label Grid.Row="1" Grid.Column="0"
+                               Text="{Binding Reason}"
+                               FontSize="12" />
+
+						<!-- No code-behind: SelectedIndex bound via converter -->
+						<Picker Grid.Row="1" Grid.Column="1"
+                                Title="Choice"
+                                SelectedIndex="{Binding Choice, Mode=TwoWay, Converter={StaticResource ChoiceToIndex}}">
+							<Picker.Items>
+								<x:String>Skip</x:String>
+								<x:String>Rename</x:String>
+								<x:String>Overwrite</x:String>
+							</Picker.Items>
+						</Picker>
+					</Grid>
+				</DataTemplate>
+			</CollectionView.ItemTemplate>
+		</CollectionView>
+
+		<!-- Rename box binds to the currently selected row -->
+		<Entry
+            x:Name="RenameBox"
+            Placeholder="If renaming, type new full destination for the selected row"
+            Text="{Binding SelectedRow.NewDestinationIfRename, Mode=TwoWay}">
+			<Entry.Triggers>
+				<!-- Enable only when SelectedRow.Choice == Rename -->
+				<DataTrigger TargetType="Entry"
+                             Binding="{Binding SelectedRow.Choice}"
+                             Value="{x:Static local:ConflictResolverPage+ConflictChoice.Rename}">
+					<Setter Property="IsEnabled" Value="True" />
+				</DataTrigger>
+				<DataTrigger TargetType="Entry"
+                             Binding="{Binding SelectedRow.Choice}"
+                             Value="{x:Static local:ConflictResolverPage+ConflictChoice.Skip}">
+					<Setter Property="IsEnabled" Value="False" />
+				</DataTrigger>
+				<DataTrigger TargetType="Entry"
+                             Binding="{Binding SelectedRow.Choice}"
+                             Value="{x:Static local:ConflictResolverPage+ConflictChoice.Overwrite}">
+					<Setter Property="IsEnabled" Value="False" />
+				</DataTrigger>
+			</Entry.Triggers>
+		</Entry>
+
+		<Button Text="Apply" Command="{Binding ApplyCommand}" />
+	</VerticalStackLayout>
+</ContentPage>

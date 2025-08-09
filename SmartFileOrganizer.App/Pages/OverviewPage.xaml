@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:mc="clr-namespace:Microcharts.Maui;assembly=Microcharts.Maui"
+             x:Class="SmartFileOrganizer.App.Pages.OverviewPage"
+             Title="Overview">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+            <Label Text="Where everything ended up" FontSize="20" FontAttributes="Bold" />
+            <!-- Donut -->
+            <Frame Padding="10" BorderColor="#00000018" CornerRadius="10">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="By Category" FontAttributes="Bold" />
+                    <mc:ChartView x:Name="Donut" HeightRequest="180"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Mini Tree -->
+            <Frame Padding="10" BorderColor="#00000018" CornerRadius="10">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Destination mini-map" FontAttributes="Bold" />
+                    <CollectionView x:Name="Tree" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Button Text="Open destination folder�" Clicked="OnOpenFolder"/>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
