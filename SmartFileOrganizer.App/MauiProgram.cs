@@ -51,7 +51,7 @@ public static class MauiProgram
         builder.Services.AddTransient<AdvancedPlannerViewModel>();
 
         // ---------- Pages ----------
-        builder.Services.AddSingleton<MainPage>();
+        builder.Services.AddSingleton<AppShell>();
         builder.Services.AddTransient<AdvancedPlannerPage>();
         builder.Services.AddTransient<RulesPage>();
         builder.Services.AddTransient<OverviewPage>();

@@ -6,11 +6,13 @@ namespace SmartFileOrganizer.App.Pages;
 public partial class AdvancedPlannerPage : ContentPage
 {
     private readonly AdvancedPlannerViewModel _vm;
+    private readonly MainViewModel _mainViewModel;
 
-    public AdvancedPlannerPage(AdvancedPlannerViewModel vm)
+    public AdvancedPlannerPage(AdvancedPlannerViewModel vm, MainViewModel mainViewModel)
     {
         InitializeComponent();
         _vm = vm;
+        _mainViewModel = mainViewModel;
         BindingContext = _vm;
     }
 
@@ -18,16 +20,13 @@ public partial class AdvancedPlannerPage : ContentPage
     {
         base.OnAppearing();
 
-        // Get roots from the MainViewModel (the list you show as chips on MainPage)
-        var services = Application.Current?.Handler?.MauiContext?.Services;
-        var main = services?.GetService<MainViewModel>();
-        var roots = main?.SelectedRoots?.ToList() ?? new List<string>();
+        var roots = _mainViewModel.SelectedRoots?.ToList() ?? new List<string>();
 
         // If nothing was selected, default to the user profile so the tree renders
         if (roots.Count == 0)
             roots.Add(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
-        await _vm.InitializeAsync(roots);
+        await _vm.InitializeAsync(roots, _mainViewModel.CurrentPlan);
     }
 
     private async void OnSave(object sender, EventArgs e)

@@ -1,4 +1,6 @@
 ﻿using SmartFileOrganizer.App.Services;
+using SmartFileOrganizer.App.ViewModels;
+
 
 #if WINDOWS
 
@@ -10,14 +12,37 @@ namespace SmartFileOrganizer.App.Pages;
 
 public partial class OverviewPage : ContentPage
 {
-    private readonly OverviewResult _data;
-    private readonly string _exampleFolderToOpen;
+    private OverviewResult? _data;
+    private string? _exampleFolderToOpen;
+    private readonly IOverviewService _overviewService;
+    private readonly MainViewModel _mainViewModel;
 
-    public OverviewPage(OverviewResult data, string? exampleOpenFolder)
+    public OverviewPage(IOverviewService overviewService, MainViewModel mainViewModel)
     {
         InitializeComponent();
-        _data = data;
-        _exampleFolderToOpen = exampleOpenFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        _overviewService = overviewService;
+        _mainViewModel = mainViewModel;
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+
+        if (_mainViewModel.CurrentPlan is null)
+        {
+            _data = new OverviewResult(new List<OverviewCategory>(), new OverviewNode("No Plan Available", new List<OverviewNode>()));
+            _exampleFolderToOpen = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            // Optionally, display a message to the user or clear existing UI elements
+            // For now, the BuildDonut and BuildTree methods will handle the empty data.
+        }
+        else
+        {
+            _data = _overviewService.Build(_mainViewModel.CurrentPlan);
+            _exampleFolderToOpen = _mainViewModel.CurrentPlan.Moves
+                .Select(m => Path.GetDirectoryName(m.Destination))
+                .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p))
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
 
         BuildDonut();
         BuildTree();
@@ -25,7 +50,7 @@ public partial class OverviewPage : ContentPage
 
     private void BuildDonut()
     {
-        var slices = _data.Categories
+        var slices = _data!.Categories
             .Select(c => new DonutSlice(c.Name, c.Count))
             .ToList();
 
@@ -42,7 +67,7 @@ public partial class OverviewPage : ContentPage
             foreach (var c in n.Children.OrderByDescending(x => x.Files))
                 Walk(c, d + 1);
         }
-        Walk(_data.DestinationTree, 0);
+        Walk(_data!.DestinationTree, 0);
 
         Tree.ItemsSource = items.Select(i => new { Text = i.text });
         Tree.ItemTemplate = new DataTemplate(() =>

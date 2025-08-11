@@ -1,6 +1,7 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.Dispatching;
+using Microsoft.Maui.Graphics;
 using SmartFileOrganizer.App.Models;
 using SmartFileOrganizer.App.Pages;
 using SmartFileOrganizer.App.Services;
@@ -28,14 +29,33 @@ public partial class MainViewModel : ObservableObject
     private FileNode? mapCache;
 
     public PlanPreferences Preferences { get; } = new();
+
+    // live progress console
     public ObservableCollection<string> ProgressLines { get; } = new();
+
+    // SCAN TREE shown by CurrentTreeView
+    public ObservableCollection<CurrentTreeNode> CurrentRoot { get; } = new();
 
     [ObservableProperty] public partial bool IsBusy { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = "Ready";
     [ObservableProperty] public partial Plan? CurrentPlan { get; set; }
     [ObservableProperty] public partial Snapshot? LastSnapshot { get; set; }
 
-    
+    [ObservableProperty] public partial string CurrentBreadcrumb { get; set; } = "";
+
+    // Progress bar properties
+    [ObservableProperty] public partial bool IsProgressVisible { get; set; }
+    [ObservableProperty] public partial bool IsIndeterminate { get; set; }
+    [ObservableProperty] public partial double ProgressValue { get; set; } // Overall progress 0-1
+    [ObservableProperty] public partial string StatusText { get; set; } = "Ready";
+    [ObservableProperty] public partial string SubStatusText { get; set; } = "";
+    [ObservableProperty] public partial JobStage Stage { get; set; } = JobStage.Idle;
+    [ObservableProperty] public partial bool CanPause { get; set; } = false;
+    [ObservableProperty] public partial bool IsPaused { get; set; } = false;
+    [ObservableProperty] public partial bool CanCancel { get; set; } = false;
+
+    IDispatcherTimer? _barTimer;
+
     public IDrawable? PlanPreviewDrawable { get; private set; }
 
     public MainViewModel(
@@ -51,7 +71,7 @@ public partial class MainViewModel : ObservableObject
 
         LoadRoots();
         LoadPrefs();
-        BuildPlanPreview(); 
+        BuildPlanPreview();
     }
 
     private static string PrefsPath => Path.Combine(
@@ -62,8 +82,6 @@ public partial class MainViewModel : ObservableObject
 
     public ObservableCollection<string> SelectedRoots { get; } = [];
 
-   
-
     [RelayCommand]
     public async Task GeneratePlanAsync(string mode)
     {
@@ -73,11 +91,12 @@ public partial class MainViewModel : ObservableObject
         ProgressLinesClear();
         AppendProgress("Generate plan started…");
 
+        IsProgressVisible = true;
+        CanCancel = true;
+        CanPause = true; // Enable pause when operation starts
+
         try
         {
-            IsBusy = true;
-            Status = "Scanning…";
-
             var roots = mode switch
             {
                 "desktop" => new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory) },
@@ -89,19 +108,21 @@ public partial class MainViewModel : ObservableObject
 
             AppendProgress($"Roots: {string.Join(", ", roots)}");
 
-            var options = new ScanOptions
-            {
-                MaxDepth = 6,
-                MaxItems = 40_000
-            };
+            var options = new ScanOptions { MaxDepth = 6, MaxItems = 40_000 };
             options.Roots.AddRange(roots);
 
-            var progress = new Progress<string>(s => { Status = s; AppendProgress(s); });
-            var scan = await _scanner.ScanAsync(options, progress, _cts.Token);
+            // Scan stage
+            var scanProgress = new Progress<ScanProgress>(ReportProgress);
+            var scan = await _scanner.ScanAsync(options, scanProgress, _cts.Token);
             await _index.SaveAsync(scan, CancellationToken.None);
 
-           
-            Status = "Applying user rules…";
+            // Scan summary
+            AppendProgress($"Scan done: {scan.TotalFiles:n0} files in {scan.TotalDirs:n0} folders{(scan.Truncated ? " (truncated)" : "")}.");
+
+            // ==== show scan immediately in the tree ====
+            BuildCurrentTreeFromScan(scan.RootTree);
+
+            // ---- RULES FIRST (User > AI) ----
             AppendProgress("Applying user rules…");
             var ruleSet = await _ruleStore.LoadAsync(_cts.Token);
             var ruleEval = _rules.Evaluate(ruleSet, scan.RootTree);
@@ -109,24 +130,21 @@ public partial class MainViewModel : ObservableObject
             var mergedPlan = new Plan { ScopeDescription = mode };
             mergedPlan.Moves.AddRange(ruleEval.Moves);
 
-            
-            Status = "Planning (AI)…";
+            // ---- AI PLAN ----
             AppendProgress("Planning (AI)…");
-            var aiPlan = await _planner.GeneratePlanAsync(scan.RootTree, mode, _cts.Token);
+            var aiPlan = await _planner.GeneratePlanApiCallAsync(scan.RootTree, mode, _cts.Token);
 
             aiPlan.Moves = [.. aiPlan.Moves.Where(m => !ruleEval.ClaimedSources.Contains(m.Source))];
-
             mergedPlan.Moves.AddRange(aiPlan.Moves);
             mergedPlan.DeleteEmptyDirectories.AddRange(aiPlan.DeleteEmptyDirectories);
 
-          
-            Status = "Checking duplicates…";
+            // ---- DUPLICATES ----
             AppendProgress("Checking duplicates…");
+            var dedupeProgress = new Progress<ScanProgress>(ReportProgress);
             var dedupeGroups = await _dedupe.FindDuplicatesAsync(
                 roots,
-                new Progress<string>(s => { Status = s; AppendProgress(s); }),
-                _cts.Token
-            );
+                dedupeProgress,
+                _cts.Token);
 
             if (dedupeGroups.Count > 0)
             {
@@ -136,7 +154,7 @@ public partial class MainViewModel : ObservableObject
                     Result = new TaskCompletionSource<DuplicatesPage.ResultPayload>()
                 };
 
-                await _nav.PushAsync(dupPage);
+                await Shell.Current.GoToAsync("//DuplicatesPage");
                 var result = await dupPage.Result.Task;
 
                 if (result.Apply)
@@ -147,8 +165,8 @@ public partial class MainViewModel : ObservableObject
                     foreach (var hl in result.Hardlinks)
                         mergedPlan.Hardlinks.Add(new HardlinkOp(hl.LinkPath, hl.Target));
 
-                    Status = $"Duplicates resolved: {result.MoveMap.Count} moves, {result.Hardlinks.Count} links";
-                    AppendProgress(Status);
+                    StatusText = $"Duplicates resolved: {result.MoveMap.Count} moves, {result.Hardlinks.Count} links";
+                    AppendProgress(StatusText);
                 }
                 else
                 {
@@ -162,25 +180,40 @@ public partial class MainViewModel : ObservableObject
 
             CurrentPlan = mergedPlan;
             mapCache = scan.RootTree;
-            BuildPlanPreview(); 
+            BuildPlanPreview();
 
-            Status = $"Plan ready: {CurrentPlan.Moves.Count} moves" + (scan.Truncated ? " (truncated)" : "");
-            AppendProgress(Status);
+            // Final completed state
+            ReportProgress(new ScanProgress { Stage = JobStage.Completed, Message = "Done" });
+            await Task.Delay(1000); // Show "Done" for 1 second
         }
         catch (OperationCanceledException)
         {
-            Status = "Cancelled";
-            AppendProgress("Cancelled.");
+            ReportProgress(new ScanProgress { Stage = JobStage.Cancelling, Message = "Cancelling…" });
+            await Task.Delay(2000); // Show cancelling for 2 seconds
         }
         catch (Exception ex)
         {
-            Status = "Failed";
-            AppendProgress(" Error: " + ex.Message);
+            ReportProgress(new ScanProgress { Stage = JobStage.Error, Message = $"Stopped with errors ({ex.Message}). See details." });
+            AppendProgress("Error: " + ex.Message);
         }
         finally
         {
-            IsBusy = false;
+            IsProgressVisible = false;
+            IsIndeterminate = false;
+            CanCancel = false;
+            CanPause = false;
+            IsPaused = false;
+            ProgressValue = 0;
+            StatusText = "Ready";
+            SubStatusText = "";
         }
+    }
+
+    [RelayCommand]
+    public void SelectCurrent(string path)
+    {
+        CurrentBreadcrumb = path;
+        AppendProgress($"Selected: {path}");
     }
 
     [RelayCommand]
@@ -188,7 +221,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (CurrentPlan is null) return;
 
-        AppendProgress(" Execute plan…");
+        AppendProgress("Execute plan…");
 
         var conflicts = await _executor.DryRunAsync(CurrentPlan, CancellationToken.None);
         IEnumerable<ConflictResolution> resolutions = [];
@@ -204,46 +237,32 @@ public partial class MainViewModel : ObservableObject
             resolutions = await page.ResolveTask.Task;
         }
 
-        IsBusy = true;
-        var progress = new Progress<string>(s => { Status = s; AppendProgress(s); });
-        LastSnapshot = await _executor.ExecuteAsync(CurrentPlan, resolutions, progress, CancellationToken.None);
+        IsProgressVisible = true;
+        CanCancel = true;
+        CanPause = true; // Enable pause when operation starts
+
+        var applyProgress = new Progress<ScanProgress>(ReportProgress); // Changed type here
+        LastSnapshot = await _executor.ExecuteAsync(CurrentPlan, resolutions, applyProgress, _cts.Token);
         await _snapshots.SaveAsync(LastSnapshot);
 
-        Status = "Completed";
-        AppendProgress(" Completed.");
-        IsBusy = false;
+        // Final completed state
+        ReportProgress(new ScanProgress { Stage = JobStage.Completed, Message = "Completed." });
+        await Task.Delay(1000);
 
-        
         var overview = _overview.Build(CurrentPlan!);
-        var firstDest = CurrentPlan!.Moves.Select(m => Path.GetDirectoryName(m.Destination))
-                                          .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
-        await _nav.PushAsync(new OverviewPage(overview, firstDest));
-    }
+        var firstDest = CurrentPlan!.Moves
+            .Select(m => Path.GetDirectoryName(m.Destination))
+            .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
+        await Shell.Current.GoToAsync("//OverviewPage");
 
-    [RelayCommand]
-    public async Task OpenAdvancedAsync()
-    {
-        if (CurrentPlan is null) return;
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        await _nav.PushAsync(
-            new AdvancedPlannerPage(
-                new AdvancedPlannerViewModel(
-                    CurrentPlan,
-                    mapCache ?? new FileNode { Name = "Root", Path = root, IsDirectory = true },
-                    root)));
-    }
-
-    [RelayCommand]
-    public async Task RevertAsync()
-    {
-        if (LastSnapshot is null) return;
-        AppendProgress(" Revert…");
-        IsBusy = true;
-        var progress = new Progress<string>(s => { Status = s; AppendProgress(s); });
-        await _executor.RevertAsync(LastSnapshot, progress, CancellationToken.None);
-        Status = "Reverted";
-        AppendProgress(" Reverted.");
-        IsBusy = false;
+        IsProgressVisible = false;
+        IsIndeterminate = false;
+        CanCancel = false;
+        CanPause = false;
+        IsPaused = false;
+        ProgressValue = 0;
+        StatusText = "Ready";
+        SubStatusText = "";
     }
 
     [RelayCommand]
@@ -257,8 +276,8 @@ public partial class MainViewModel : ObservableObject
         {
             SelectedRoots.Add(path);
             SaveRoots();
-            Status = $"Added: {path}";
-            AppendProgress(Status);
+            StatusText = $"Added: {path}";
+            AppendProgress(StatusText);
         }
         else
         {
@@ -272,15 +291,151 @@ public partial class MainViewModel : ObservableObject
         if (SelectedRoots.Remove(path))
         {
             SaveRoots();
-            Status = $"Removed: {path}";
-            AppendProgress(Status);
+            StatusText = $"Removed: {path}";
+            AppendProgress(StatusText);
         }
     }
 
-    [RelayCommand]
-    public void CancelOps() => _cts?.Cancel();
+    [RelayCommand] public void CancelOps() => _cts?.Cancel();
 
-   
+    [RelayCommand]
+    public void PauseOps()
+    {
+        IsPaused = true;
+        CanPause = false;
+        CanCancel = false; // Disable cancel while paused, or allow based on UX
+        // No actual pause mechanism for _cts, just UI indication
+        StatusText = $"Paused at {ProgressValue:P0}";
+    }
+
+    [RelayCommand]
+    public void ResumeOps()
+    {
+        IsPaused = false;
+        CanPause = true;
+        CanCancel = true;
+        // Re-report last progress to update status text
+        // This assumes ReportProgress is idempotent or handles re-reporting gracefully
+        ReportProgress(new ScanProgress
+        {
+            Stage = Stage,
+            StageProgress = ProgressValue, // Use current ProgressValue as StageProgress for re-calculation
+            OverallProgress = ProgressValue, // Use current ProgressValue as OverallProgress for re-calculation
+            Message = GetStatusText(new ScanProgress { Stage = Stage, StageProgress = ProgressValue }), // Re-evaluate message
+            // Other properties might be stale, but for UI update, this is sufficient
+        });
+    }
+
+    // --- Progress Reporting Helper ---
+    private DateTime _lastProgressUpdate = DateTime.MinValue;
+    private void ReportProgress(ScanProgress progress)
+    {
+        // Throttle UI updates to ~10 fps
+        if ((DateTime.Now - _lastProgressUpdate).TotalMilliseconds < 100 && progress.OverallProgress < 1.0)
+        {
+            return;
+        }
+        _lastProgressUpdate = DateTime.Now;
+
+        MainThread.BeginInvokeOnMainThread(async () => // Use async for Task.Delay
+        {
+            IsProgressVisible = true;
+            IsIndeterminate = progress.Stage == JobStage.Estimating || progress.Stage == JobStage.Cancelling;
+
+            // Calculate OverallProgress based on stage weights
+            double overallProgress = progress.Stage switch
+            {
+                JobStage.Estimating => 0.05 * progress.StageProgress,
+                JobStage.Scanning => 0.05 + (0.65 * progress.StageProgress),
+                JobStage.Planning => 0.05 + 0.65 + (0.20 * progress.StageProgress),
+                JobStage.Applying => 0.05 + 0.65 + 0.20 + (0.10 * progress.StageProgress),
+                JobStage.Completed => 1.0,
+                _ => 0.0 // Default for Idle, Cancelling, Error
+            };
+
+            ProgressValue = overallProgress;
+            Stage = progress.Stage;
+
+            // Handle "Done" and "No files to process" messages
+            if (progress.Stage == JobStage.Completed)
+            {
+                StatusText = progress.Message ?? GetStatusText(progress);
+                SubStatusText = GetSubStatusText(progress);
+                await Task.Delay(1000); // Show "Done" for 1 second
+                IsProgressVisible = false;
+            }
+            else if (progress.Stage == JobStage.Error)
+            {
+                StatusText = progress.Message ?? GetStatusText(progress);
+                SubStatusText = GetSubStatusText(progress);
+                // Keep visible to show error message
+            }
+            else if (IsPaused)
+            {
+                StatusText = $"Paused at {ProgressValue:P0}";
+            }
+            else
+            {
+                StatusText = progress.Message ?? GetStatusText(progress);
+                SubStatusText = GetSubStatusText(progress);
+            }
+        });
+    }
+
+    private string GetStatusText(ScanProgress progress)
+    {
+        return progress.Stage switch
+        {
+            JobStage.Estimating => "Estimating files…",
+            JobStage.Scanning => $"Scanning {progress.FilesProcessed}/{progress.FilesTotal} files ({progress.StageProgress:P0})",
+            JobStage.Planning => $"Building plan… ({progress.StageProgress:P0})",
+            JobStage.Applying => $"Applying changes… ({progress.StageProgress:P0})",
+            JobStage.Cancelling => "Cancelling…",
+            JobStage.Completed => "Done",
+            JobStage.Error => $"Stopped with errors ({progress.Errors}). See details.",
+            _ => "Ready"
+        };
+    }
+
+    private string GetSubStatusText(ScanProgress progress)
+    {
+        var parts = new List<string>();
+        if (progress.Throughput > 0) parts.Add($"Throughput {progress.Throughput:N0} items/s");
+        if (progress.Skipped > 0) parts.Add($"{progress.Skipped} skipped");
+        if (progress.Errors > 0) parts.Add($"{progress.Errors} errors");
+        if (progress.Eta.HasValue) parts.Add($"ETA {progress.Eta.Value:mm\\:ss}");
+        return string.Join(" · ", parts);
+    }
+
+
+    // --- helpers ---
+
+    private void BuildCurrentTreeFromScan(FileNode scanRoot)
+    {
+        CurrentRoot.Clear();
+
+        // put each selected root as a top-level node in the tree
+        foreach (var child in scanRoot.Children)
+            CurrentRoot.Add(ToCurrentNode(child));
+    }
+
+    private static CurrentTreeNode ToCurrentNode(FileNode n)
+    {
+        var isFolder = n.IsDirectory || (n.Children?.Count > 0);
+        var node = new CurrentTreeNode
+        {
+            Name = n.Name,
+            FullPath = n.Path,
+            IsFolder = isFolder
+        };
+
+        foreach (var c in n.Children)
+            node.Children.Add(ToCurrentNode(c));
+
+        node.FileCount = node.Children.Count(x => !x.IsFolder);
+        node.FolderCount = node.Children.Count(x => x.IsFolder);
+        return node;
+    }
 
     private void AppendProgress(string line)
     {
@@ -294,15 +449,12 @@ public partial class MainViewModel : ObservableObject
                     ProgressLines.RemoveAt(0);
             });
         }
-        catch {  }
+        catch { }
     }
 
     private void ProgressLinesClear()
     {
-        try
-        {
-            MainThread.BeginInvokeOnMainThread(ProgressLines.Clear);
-        }
+        try { MainThread.BeginInvokeOnMainThread(ProgressLines.Clear); }
         catch { }
     }
 
@@ -318,7 +470,7 @@ public partial class MainViewModel : ObservableObject
             if (SelectedRoots.Count == 0)
                 SelectedRoots.Add(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
         }
-        catch {  }
+        catch { }
     }
 
     private void SaveRoots()
@@ -328,7 +480,7 @@ public partial class MainViewModel : ObservableObject
             Directory.CreateDirectory(Path.GetDirectoryName(RootsPath)!);
             File.WriteAllText(RootsPath, JsonSerializer.Serialize(SelectedRoots.ToList()));
         }
-        catch {  }
+        catch { }
     }
 
     private void LoadPrefs()
@@ -377,7 +529,6 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        
         var top = CurrentPlan.Moves
             .Select(m => Path.GetDirectoryName(m.Destination) ?? "")
             .Where(p => !string.IsNullOrWhiteSpace(p))
@@ -390,7 +541,6 @@ public partial class MainViewModel : ObservableObject
         PlanPreviewDrawable = new BarsDrawable(top);
     }
 
-    
     private readonly record struct Bar(string Label, int Value);
 
     private sealed class EmptyPreviewDrawable : IDrawable
@@ -442,7 +592,7 @@ public partial class MainViewModel : ObservableObject
                 var barW = (right - left) * pct;
 
                 var barRect = new RectF(left, y + 4, barW, rowH - 8);
-                canvas.FillColor = Color.FromRgba(107, 87, 182, 255); 
+                canvas.FillColor = Color.FromRgba(107, 87, 182, 255);
                 canvas.FillRectangle(barRect);
 
                 canvas.FontSize = 12;
@@ -457,4 +607,6 @@ public partial class MainViewModel : ObservableObject
             canvas.RestoreState();
         }
     }
+
+    
 }

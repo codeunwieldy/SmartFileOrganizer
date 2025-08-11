@@ -7,45 +7,96 @@
 
     <Application.Resources>
         <ResourceDictionary>
-            <Color x:Key="Primary">#6750A4</Color>
+            <!-- Colors -->
+            <Color x:Key="PrimaryColor">#6200EE</Color>
+            <Color x:Key="SecondaryColor">#03DAC6</Color>
+            <Color x:Key="LightBackgroundColor">#FFFFFF</Color>
+            <Color x:Key="DarkBackgroundColor">#121212</Color>
+            <Color x:Key="LightTextColor">#212121</Color>
+            <Color x:Key="DarkTextColor">#E0E0E0</Color>
+            <Color x:Key="LightSurfaceColor">#F5F5F5</Color>
+            <Color x:Key="DarkSurfaceColor">#1E1E1E</Color>
+            <Color x:Key="BorderColor">#BDBDBD</Color>
 
-            <Style TargetType="ContentPage">
-                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFFFFF, Dark=#121212}" />
+            <!-- Styles -->
+            <Style TargetType="Shell" ApplyToDerivedTypes="True">
+                <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource LightBackgroundColor}, Dark={StaticResource DarkBackgroundColor}}" />
+                <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource LightTextColor}, Dark={StaticResource DarkTextColor}}" />
+                <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource LightTextColor}, Dark={StaticResource DarkTextColor}}" />
+                <Setter Property="Shell.DisabledColor" Value="{StaticResource BorderColor}" />
+                <Setter Property="Shell.UnselectedColor" Value="{StaticResource BorderColor}" />
+                <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource LightSurfaceColor}, Dark={StaticResource DarkSurfaceColor}}" />
+                <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource PrimaryColor}, Dark={StaticResource PrimaryColor}}" />
+                <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource LightTextColor}, Dark={StaticResource DarkTextColor}}" />
+                <Setter Property="Shell.TabBarUnselectedColor" Value="{StaticResource BorderColor}" />
             </Style>
 
-            <Style TargetType="Label">
-                <Setter Property="TextColor" Value="{AppThemeBinding Light=#111111, Dark=#EEEEEE}" />
+            <Style TargetType="ContentPage" ApplyToDerivedTypes="True">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LightBackgroundColor}, Dark={StaticResource DarkBackgroundColor}}" />
             </Style>
 
-			<Style TargetType="Button">
-				<Setter Property="CornerRadius" Value="10"/>
-				<Setter Property="Padding" Value="10,8"/>
-				<Setter Property="BackgroundColor" Value="#6B57B6"/>
-				<Setter Property="TextColor" Value="White"/>
+            <Style TargetType="Label" ApplyToDerivedTypes="True">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource LightTextColor}, Dark={StaticResource DarkTextColor}}" />
+            </Style>
 
-				<Setter Property="VisualStateManager.VisualStateGroups">
-					<VisualStateGroupList>
-						<VisualStateGroup x:Name="CommonStates">
-							<VisualState x:Name="Normal"/>
-							<VisualState x:Name="PointerOver">
-								<VisualState.Setters>
-									<Setter Property="BackgroundColor" Value="#7B67C6"/>
-								</VisualState.Setters>
-							</VisualState>
-							<VisualState x:Name="Pressed">
-								<VisualState.Setters>
-									<Setter Property="BackgroundColor" Value="#5845A6"/>
-								</VisualState.Setters>
-							</VisualState>
-							<VisualState x:Name="Disabled">
-								<VisualState.Setters>
-									<Setter Property="Opacity" Value="0.5"/>
-								</VisualState.Setters>
-							</VisualState>
-						</VisualStateGroup>
-					</VisualStateGroupList>
-				</Setter>
-			</Style>
+            <Style TargetType="Button" ApplyToDerivedTypes="True">
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="12,10"/>
+                <Setter Property="BackgroundColor" Value="{StaticResource PrimaryColor}"/>
+                <Setter Property="TextColor" Value="White"/>
+                <Setter Property="VisualStateManager.VisualStateGroups">
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal"/>
+                            <VisualState x:Name="PointerOver">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#7C4DFF"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="#4527A0"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="Opacity" Value="0.6"/>
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter>
+            </Style>
+
+            <Style TargetType="Border" ApplyToDerivedTypes="True">
+                <Setter Property="Stroke" Value="{StaticResource BorderColor}"/>
+                <Setter Property="StrokeThickness" Value="1"/>
+                <Setter Property="StrokeShape">
+                    <Setter.Value>
+                        <RoundRectangle CornerRadius="8"/>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LightSurfaceColor}, Dark={StaticResource DarkSurfaceColor}}"/>
+            </Style>
+
+            <Style TargetType="Entry" ApplyToDerivedTypes="True">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource LightTextColor}, Dark={StaticResource DarkTextColor}}"/>
+                <Setter Property="PlaceholderColor" Value="{StaticResource BorderColor}"/>
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LightSurfaceColor}, Dark={StaticResource DarkSurfaceColor}}"/>
+                <Setter Property="HeightRequest" Value="44"/>
+            </Style>
+
+            <Style TargetType="Picker" ApplyToDerivedTypes="True">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource LightTextColor}, Dark={StaticResource DarkTextColor}}"/>
+                <Setter Property="TitleColor" Value="{StaticResource BorderColor}"/>
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource LightSurfaceColor}, Dark={StaticResource DarkSurfaceColor}}"/>
+                <Setter Property="HeightRequest" Value="44"/>
+            </Style>
+
+            <Style TargetType="Switch" ApplyToDerivedTypes="True">
+                <Setter Property="OnColor" Value="{StaticResource PrimaryColor}"/>
+                <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource LightBackgroundColor}, Dark={StaticResource DarkBackgroundColor}}"/>
+            </Style>
 			<conv:EqualityConverter x:Key="EqualityConverter" />
             <conv:InverseBoolConverter x:Key="InverseBoolConverter" />
         </ResourceDictionary>

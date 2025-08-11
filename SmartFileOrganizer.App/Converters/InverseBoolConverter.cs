@@ -1,13 +1,13 @@
-﻿using System.Globalization;
+﻿using Microsoft.Maui.Controls;   
+using System.Globalization;
 
-namespace SmartFileOrganizer.App.Converters
+namespace SmartFileOrganizer.App.Converters;
+
+public sealed class InverseBoolConverter : IValueConverter
 {
-    public sealed class EqualityConverter : IValueConverter
-    {
-        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => Equals(value, parameter);
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is bool b ? !b : value!;
 
-        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => Binding.DoNothing;
-    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is bool b ? !b : Binding.DoNothing;
 }

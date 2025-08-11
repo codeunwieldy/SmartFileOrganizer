@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="SmartFileOrganizer.App.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:SmartFileOrganizer.App.Pages"
+    Shell.FlyoutBehavior="Disabled">
+
+    <TabBar>
+        <ShellContent
+            Title="Home"
+            ContentTemplate="{DataTemplate local:MainPage}"
+            Route="MainPage" />
+
+        <ShellContent
+            Title="Advanced Planner"
+            ContentTemplate="{DataTemplate local:AdvancedPlannerPage}"
+            Route="AdvancedPlannerPage" />
+
+        <ShellContent
+            Title="Rules"
+            ContentTemplate="{DataTemplate local:RulesPage}"
+            Route="RulesPage" />
+
+        <ShellContent
+            Title="Duplicates"
+            ContentTemplate="{DataTemplate local:DuplicatesPage}"
+            Route="DuplicatesPage" />
+
+        <ShellContent
+            Title="Overview"
+            ContentTemplate="{DataTemplate local:OverviewPage}"
+            Route="OverviewPage" />
+    </TabBar>
+
+</Shell>

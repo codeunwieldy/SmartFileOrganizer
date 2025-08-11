@@ -4,46 +4,22 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:SmartFileOrganizer.App.ViewModels"
+    xmlns:ctrls="clr-namespace:SmartFileOrganizer.App.Pages.Controls"
+    xmlns:local="clr-namespace:SmartFileOrganizer.App"
+	xmlns:conv="clr-namespace:SmartFileOrganizer.App.Converters"
     x:Name="MainRoot"
     Title="Smart File Organizer"
     x:DataType="vm:MainViewModel">
 
-	<!-- Page-wide styles (hover/pressed/disabled) -->
+	<!-- add this -->
 	<ContentPage.Resources>
-		<Style TargetType="Button">
-			<Setter Property="Padding" Value="10,8"/>
-			<Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#F3F3F3, Dark=#272727}"/>
-			<Setter Property="CornerRadius" Value="8"/>
-			<Setter Property="VisualStateManager.VisualStateGroups">
-				<VisualStateGroupList>
-					<VisualStateGroup x:Name="CommonStates">
-						<VisualState x:Name="Normal"/>
-						<VisualState x:Name="PointerOver">
-							<VisualState.Setters>
-								<Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#EAEAEA, Dark=#303030}"/>
-								<Setter Property="Scale" Value="1.02"/>
-							</VisualState.Setters>
-						</VisualState>
-						<VisualState x:Name="Pressed">
-							<VisualState.Setters>
-								<Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#DCDCDC, Dark=#383838}"/>
-								<Setter Property="Scale" Value="0.98"/>
-							</VisualState.Setters>
-						</VisualState>
-						<VisualState x:Name="Disabled">
-							<VisualState.Setters>
-								<Setter Property="Opacity" Value="0.55"/>
-							</VisualState.Setters>
-						</VisualState>
-					</VisualStateGroup>
-				</VisualStateGroupList>
-			</Setter>
-		</Style>
+		<ResourceDictionary>
+			<conv:InverseBoolConverter x:Key="InverseBoolConverter" />
+		</ResourceDictionary>
 	</ContentPage.Resources>
 
 	<ScrollView>
 		<VerticalStackLayout Spacing="14" Padding="20">
-
 			<Label Text="Choose Mode" FontSize="20" />
 
 			<!-- Mode buttons -->
@@ -62,13 +38,28 @@
 			</Grid>
 
 			<!-- Busy + status -->
-			<Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" VerticalOptions="Center">
-				<ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
-				<Label Grid.Column="1" Text="{Binding Status}" LineBreakMode="TailTruncation" />
+			<Grid ColumnDefinitions="*,*" ColumnSpacing="8" VerticalOptions="Center"
+                  IsVisible="{Binding IsProgressVisible}">
+
+				<!-- determinate bar -->
+				<ProgressBar Grid.ColumnSpan="2"
+                             IsVisible="{Binding IsIndeterminate, Converter={StaticResource InverseBoolConverter}}"
+                             Progress="{Binding ProgressValue}"
+                             HeightRequest="6"
+                             AutomationProperties.Name="File scan progress" />
+
+				<!-- indeterminate spinner -->
+				<ActivityIndicator Grid.ColumnSpan="2"
+                                   IsVisible="{Binding IsIndeterminate}"
+                                   IsRunning="{Binding IsIndeterminate}" />
+
+				<Label Grid.Column="0" Text="{Binding StatusText}" LineBreakMode="TailTruncation" />
+				<Label Grid.Column="1" Text="{Binding SubStatusText}" LineBreakMode="TailTruncation" />
 			</Grid>
 
+
 			<!-- Tiny console of recent progress lines -->
-			<Border StrokeThickness="1" Stroke="#33000000" Padding="6" IsVisible="{Binding IsBusy}">
+			<Border StrokeThickness="1" Stroke="#33000000" Padding="6" IsVisible="{Binding IsProgressVisible}">
 				<VerticalStackLayout Spacing="4">
 					<Label Text="Progress" FontAttributes="Bold" FontSize="12"/>
 					<CollectionView x:Name="ProgressList"
@@ -87,12 +78,9 @@
 			</Border>
 
 			<!-- Main actions -->
-			<Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-				<Button Text="Advanced Planner" Command="{Binding OpenAdvancedCommand}" />
-				<Button Grid.Column="1" Text="One-click Clean" Command="{Binding ExecuteCommand}" />
-				<Button Grid.Row="1" Text="Revert" Command="{Binding RevertCommand}" />
-				<Button Grid.Row="1" Grid.Column="1" Text="Toggle Theme" Clicked="OnToggleTheme" />
-				<Button Text="Rules" Clicked="OnOpenRules" />
+			<Grid ColumnDefinitions="*,*" RowDefinitions="Auto">
+				<Button Text="One-click Clean" Command="{Binding ExecuteCommand}" />
+				<Button Grid.Column="1" Text="Revert" Command="{Binding RevertCommand}" />
 			</Grid>
 
 			<!-- Folder actions -->
@@ -148,7 +136,7 @@
 				</VerticalStackLayout>
 			</Border>
 
-			<!-- Visual overview -->
+			<!-- Visual overview (bars) -->
 			<Border Padding="10" Stroke="#33000000" StrokeThickness="1">
 				<Border.StrokeShape>
 					<RoundRectangle CornerRadius="8" />
@@ -160,9 +148,18 @@
 				</VerticalStackLayout>
 			</Border>
 
+			<!-- Scan preview tree (populated immediately after ScanAsync) -->
+			<Border Padding="10" Stroke="#33000000" StrokeThickness="1">
+				<Border.StrokeShape>
+					<RoundRectangle CornerRadius="8" />
+				</Border.StrokeShape>
+				<VerticalStackLayout Spacing="6">
+					<Label Text="Scan Preview (Current File Tree)" FontAttributes="Bold" />
+					<Label Text="{Binding CurrentBreadcrumb}" FontSize="12" LineBreakMode="TailTruncation" />
+					<ctrls:CurrentTreeView HeightRequest="420" />
+				</VerticalStackLayout>
+			</Border>
+
 		</VerticalStackLayout>
 	</ScrollView>
 </ContentPage>
-
-
-

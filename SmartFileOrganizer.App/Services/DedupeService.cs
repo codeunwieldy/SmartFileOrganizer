@@ -1,4 +1,5 @@
 ﻿using SmartFileOrganizer.App.Models;
+using System.Diagnostics;
 
 namespace SmartFileOrganizer.App.Services;
 
@@ -8,49 +9,142 @@ public class DedupeService : IDedupeService
 
     public DedupeService(IHashingService hasher) => _hasher = hasher;
 
-    public async Task<List<DuplicateGroup>> FindDuplicatesAsync(IEnumerable<string> roots, IProgress<string>? progress, CancellationToken ct)
+    public async Task<List<DuplicateGroup>> FindDuplicatesAsync(IEnumerable<string> roots, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
+        var stopwatch = Stopwatch.StartNew();
+        var lastReportTime = DateTime.MinValue;
+        int errors = 0;
+        int skipped = 0;
+
         // 1) collect files -> bucket by size
         var files = new List<FileInfo>();
+        long totalBytes = 0;
+        int enumeratedFiles = 0;
+
+        void ReportProgress(JobStage stage, string? message = null)
+        {
+            if (progress == null) return;
+
+            // Throttle updates to avoid excessive reporting
+            if ((DateTime.Now - lastReportTime).TotalMilliseconds < 100 && enumeratedFiles < files.Count)
+            {
+                return;
+            }
+            lastReportTime = DateTime.Now;
+
+            var stageProgress = files.Count > 0 ? (double)enumeratedFiles / files.Count : 1.0;
+            var throughput = stopwatch.Elapsed.TotalSeconds > 0 ? enumeratedFiles / stopwatch.Elapsed.TotalSeconds : 0;
+            TimeSpan? eta = null;
+            if (throughput > 0 && enumeratedFiles < files.Count)
+            {
+                eta = TimeSpan.FromSeconds((files.Count - enumeratedFiles) / throughput);
+            }
+
+            progress.Report(new ScanProgress
+            {
+                Stage = stage,
+                StageProgress = stageProgress,
+                FilesProcessed = enumeratedFiles,
+                FilesTotal = files.Count,
+                BytesProcessed = totalBytes, // This will be total bytes of files enumerated so far
+                BytesTotal = totalBytes, // This will be total bytes of files enumerated so far
+                ActionsDone = enumeratedFiles, // Using enumeratedFiles as ActionsDone for this stage
+                ActionsTotal = files.Count, // Using files.Count as ActionsTotal for this stage
+                Throughput = throughput,
+                Eta = eta,
+                Message = message,
+                Errors = errors,
+                Skipped = skipped
+            });
+        }
+
+        ReportProgress(JobStage.Estimating, "Enumerating files for deduplication...");
+
         foreach (var root in roots)
         {
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) continue;
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) { skipped++; continue; }
             foreach (var path in EnumerateFilesSafe(root))
-                files.Add(new FileInfo(path));
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    var fi = new FileInfo(path);
+                    files.Add(fi);
+                    totalBytes += fi.Length;
+                    enumeratedFiles++;
+                    ReportProgress(JobStage.Estimating, $"Found {enumeratedFiles} files...");
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    ReportProgress(JobStage.Estimating, $"Error enumerating {path}: {ex.Message}");
+                }
+            }
+        }
+
+        var totalFilesToProcess = files.Count;
+        if (totalFilesToProcess == 0)
+        {
+            ReportProgress(JobStage.Completed, "No files to deduplicate.");
+            return new List<DuplicateGroup>();
         }
 
         var bySize = files.GroupBy(f => f.Length).Where(g => g.Count() > 1);
 
         var groups = new List<DuplicateGroup>();
+        long processedBytes = 0;
+        int processedFiles = 0;
+
+        // Reset stopwatch for actual hashing progress
+        stopwatch.Restart();
+        enumeratedFiles = 0; // Reset for hashing progress
+
         foreach (var sizeBucket in bySize)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report($"Dedup pass (partial hash): {sizeBucket.Key:n0} bytes");
 
             // 2) partial hash (first 256KB) to prune
             var byPartial = new Dictionary<string, List<FileInfo>>(StringComparer.OrdinalIgnoreCase);
             foreach (var f in sizeBucket)
             {
+                ct.ThrowIfCancellationRequested();
                 try
                 {
                     var ph = await _hasher.HashFileAsync(f.FullName, partialBytes: 256 * 1024, ct);
                     (byPartial.TryGetValue(ph, out var list) ? list : byPartial[ph] = new()).Add(f);
+                    processedBytes += f.Length; // Accumulate processed bytes
+                    processedFiles++;
+                    enumeratedFiles++; // Increment for overall progress of hashing
+                    ReportProgress(JobStage.Planning, $"Dedup pass (partial hash): {f.Name}");
                 }
-                catch { /* ignore locked/inaccessible */ }
+                catch (Exception ex)
+                {
+                    errors++;
+                    ReportProgress(JobStage.Planning, $"Error partial hashing {f.Name}: {ex.Message}");
+                }
             }
 
             // 3) full hash within partial-collisions
             foreach (var partial in byPartial.Values.Where(v => v.Count > 1))
             {
+                ct.ThrowIfCancellationRequested();
                 var byFull = new Dictionary<string, List<FileInfo>>(StringComparer.OrdinalIgnoreCase);
                 foreach (var f in partial)
                 {
+                    ct.ThrowIfCancellationRequested();
                     try
                     {
                         var full = await _hasher.HashFileAsync(f.FullName, partialBytes: 0, ct);
                         (byFull.TryGetValue(full, out var list) ? list : byFull[full] = new()).Add(f);
+                        // processedFiles and processedBytes are already incremented by partial hash
+                        // enumeratedFiles is also incremented by partial hash
+                        ReportProgress(JobStage.Planning, $"Dedup pass (full hash): {f.Name}");
                     }
-                    catch { /* ignore */ }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        ReportProgress(JobStage.Planning, $"Error full hashing {f.Name}: {ex.Message}");
+                    }
                 }
 
                 foreach (var dup in byFull.Where(kv => kv.Value.Count > 1))
@@ -67,6 +161,9 @@ public class DedupeService : IDedupeService
                 }
             }
         }
+        stopwatch.Stop();
+        ReportProgress(JobStage.Completed, "Deduplication complete.");
+
         return groups;
     }
 

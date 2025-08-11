@@ -1,4 +1,5 @@
 ﻿using SmartFileOrganizer.App.Models;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace SmartFileOrganizer.App.Services;
@@ -8,11 +9,55 @@ public class ExecutorService : IExecutorService
     public async Task<Snapshot> ExecuteAsync(
         Plan plan,
         IEnumerable<IExecutorService.ConflictResolution> resolutions,
-        IProgress<string>? progress,
+        IProgress<ScanProgress>? progress, // Changed type here
         CancellationToken ct)
     {
         var resDict = resolutions.ToDictionary(r => r.Destination, StringComparer.OrdinalIgnoreCase);
         var snap = new Snapshot();
+
+        // Progress tracking variables
+        var totalActions = plan.Moves.Count + plan.Hardlinks.Count;
+        var actionsDone = 0;
+        var errors = 0;
+        var skipped = 0;
+        var stopwatch = Stopwatch.StartNew();
+        var lastReportTime = DateTime.MinValue;
+
+        void ReportProgress(string? message = null)
+        {
+            if (progress == null) return;
+
+            // Throttle updates to avoid excessive reporting
+            if ((DateTime.Now - lastReportTime).TotalMilliseconds < 100 && actionsDone < totalActions)
+            {
+                return;
+            }
+            lastReportTime = DateTime.Now;
+
+            var stageProgress = totalActions > 0 ? (double)actionsDone / totalActions : 1.0;
+            var throughput = stopwatch.Elapsed.TotalSeconds > 0 ? actionsDone / stopwatch.Elapsed.TotalSeconds : 0;
+            TimeSpan? eta = null;
+            if (throughput > 0 && actionsDone < totalActions)
+            {
+                eta = TimeSpan.FromSeconds((totalActions - actionsDone) / throughput);
+            }
+
+            progress.Report(new ScanProgress
+            {
+                Stage = JobStage.Applying,
+                StageProgress = stageProgress,
+                OverallProgress = 0.90 + (0.10 * stageProgress), // Assuming Applying is 10% of overall, after 90% is done
+                ActionsDone = actionsDone,
+                ActionsTotal = totalActions,
+                Throughput = throughput,
+                Eta = eta,
+                Message = message,
+                Errors = errors,
+                Skipped = skipped
+            });
+        }
+
+        ReportProgress("Starting application of changes...");
 
         // 1) Moves
         foreach (var op in plan.Moves)
@@ -20,36 +65,49 @@ public class ExecutorService : IExecutorService
             ct.ThrowIfCancellationRequested();
             var dest = op.Destination;
 
-            if (File.Exists(dest) && resDict.TryGetValue(dest, out var r))
+            try
             {
-                switch (r.Choice)
+                if (File.Exists(dest) && resDict.TryGetValue(dest, out var r))
                 {
-                    case IExecutorService.ConflictChoice.Skip:
-                        progress?.Report($"Skipped: {op.Source}");
-                        continue;
-                    case IExecutorService.ConflictChoice.Rename:
-                        dest = !string.IsNullOrWhiteSpace(r.NewDestinationIfRename)
-                            ? r.NewDestinationIfRename
-                            : EnsureUnique(dest);
-                        break;
+                    switch (r.Choice)
+                    {
+                        case IExecutorService.ConflictChoice.Skip:
+                            skipped++;
+                            ReportProgress($"Skipped: {op.Source}");
+                            continue;
+                        case IExecutorService.ConflictChoice.Rename:
+                            dest = !string.IsNullOrWhiteSpace(r.NewDestinationIfRename)
+                                ? r.NewDestinationIfRename
+                                : EnsureUnique(dest);
+                            break;
 
-                    case IExecutorService.ConflictChoice.Overwrite:
-                        try { File.Delete(dest); } catch { dest = EnsureUnique(dest); }
-                        break;
+                        case IExecutorService.ConflictChoice.Overwrite:
+                            try { File.Delete(dest); } catch { dest = EnsureUnique(dest); } // Fallback if delete fails
+                            break;
+                    }
                 }
+                else if (File.Exists(dest))
+                {
+                    dest = EnsureUnique(dest);
+                }
+
+                var destDir = Path.GetDirectoryName(dest)!;
+                Directory.CreateDirectory(destDir);
+
+                File.Move(op.Source, dest, overwrite: false);
+                snap.ReverseMoves.Add((dest, op.Source));
+                ReportProgress($"Moved: {op.Source} -> {dest}");
             }
-            else if (File.Exists(dest))
+            catch (Exception ex)
             {
-                dest = EnsureUnique(dest);
+                errors++;
+                ReportProgress($"Error moving {op.Source}: {ex.Message}");
             }
-
-            var destDir = Path.GetDirectoryName(dest)!;
-            Directory.CreateDirectory(destDir);
-
-            File.Move(op.Source, dest, overwrite: false);
-            snap.ReverseMoves.Add((dest, op.Source));
-            progress?.Report($"Moved: {op.Source} -> {dest}");
-            await Task.Yield();
+            finally
+            {
+                actionsDone++;
+                await Task.Yield();
+            }
         }
 
         // 2) Hardlinks
@@ -60,38 +118,54 @@ public class ExecutorService : IExecutorService
             var link = hl.LinkPath;
             var target = hl.TargetExistingPath;
 
-            if (File.Exists(link))
+            try
             {
-                try { File.Delete(link); }
-                catch
+                if (File.Exists(link))
                 {
-                    progress?.Report($"Skip link (cannot delete): {link}");
-                    continue;
+                    try { File.Delete(link); }
+                    catch
+                    {
+                        skipped++;
+                        ReportProgress($"Skip link (cannot delete): {link}");
+                        continue;
+                    }
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+
+                if (TryCreateHardLink(link, target))
+                {
+                    snap.CreatedHardlinks.Add(link);
+                    ReportProgress($"Linked: {link} → {target}");
+                }
+                else
+                {
+                    try
+                    {
+                        File.Copy(target, link, overwrite: false);
+                        ReportProgress($"Copied (fallback): {link} ← {target}");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        ReportProgress($"Hardlink failed and copy failed: {link}: {ex.Message}");
+                    }
                 }
             }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(link)!);
-
-            if (TryCreateHardLink(link, target))
+            catch (Exception ex)
             {
-                snap.CreatedHardlinks.Add(link);
-                progress?.Report($"Linked: {link} → {target}");
+                errors++;
+                ReportProgress($"Error linking {link}: {ex.Message}");
             }
-            else
+            finally
             {
-                try
-                {
-                    File.Copy(target, link, overwrite: false);
-                    progress?.Report($"Copied (fallback): {link} ← {target}");
-                }
-                catch (Exception ex)
-                {
-                    progress?.Report($"Hardlink failed and copy failed: {link}: {ex.Message}");
-                }
+                actionsDone++;
+                await Task.Yield();
             }
-
-            await Task.Yield();
         }
+
+        stopwatch.Stop();
+        ReportProgress("Application of changes completed."); // Final report
 
         return snap;
     }

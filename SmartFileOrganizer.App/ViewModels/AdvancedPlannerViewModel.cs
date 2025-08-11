@@ -8,9 +8,9 @@ namespace SmartFileOrganizer.App.ViewModels;
 
 public partial class AdvancedPlannerViewModel : ObservableObject
 {
-    private readonly Plan _plan;
+    private Plan? _plan;
     private FileNode? _actualRoot;               // now nullable & assignable so we can scan
-    private readonly string _allowedRoot;
+    private string? _allowedRoot;
 
     public ObservableCollection<CurrentTreeNode> CurrentRoot { get; } = [];
     public ObservableCollection<PlanTreeNode> DestinationRoot { get; } = [];
@@ -21,14 +21,9 @@ public partial class AdvancedPlannerViewModel : ObservableObject
     [ObservableProperty]
     public partial string DestinationBreadcrumb { get; set; } = "";
 
-    public AdvancedPlannerViewModel(Plan plan, FileNode actualRoot, string allowedRoot)
+    public AdvancedPlannerViewModel()
     {
-        _plan = plan;
-        _actualRoot = actualRoot;
-        _allowedRoot = allowedRoot;
-
-        BuildCurrentTree();
-        BuildDestinationTree();
+        // Constructor is now parameterless
     }
 
     /// <summary>
@@ -36,8 +31,9 @@ public partial class AdvancedPlannerViewModel : ObservableObject
     /// this tries to resolve IFileScanner from the MAUI service provider and scan them;
     /// otherwise it just rebuilds with the existing <see cref="_actualRoot"/>.
     /// </summary>
-    public async Task InitializeAsync(IEnumerable<string>? roots, CancellationToken ct = default)
+    public async Task InitializeAsync(IEnumerable<string>? roots, Plan? plan, CancellationToken ct = default)
     {
+        _plan = plan; // Assign the plan here
         // Try to scan only if roots were provided
         var rootsList = roots?.Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? [];
         if (rootsList.Count > 0)
@@ -101,8 +97,12 @@ public partial class AdvancedPlannerViewModel : ObservableObject
     private void BuildDestinationTree()
     {
         DestinationRoot.Clear();
+        if (_plan?.Moves is null) return; // Add null check here
+
         foreach (var move in _plan.Moves)
         {
+            if (move is null || string.IsNullOrWhiteSpace(move.Destination) || string.IsNullOrWhiteSpace(move.Source)) continue; // Add null checks for move and its properties
+
             var destDir = Path.GetDirectoryName(move.Destination) ?? "";
             var fileName = Path.GetFileName(move.Destination);
 

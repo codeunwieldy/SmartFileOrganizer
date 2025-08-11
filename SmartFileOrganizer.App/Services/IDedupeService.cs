@@ -4,5 +4,5 @@ namespace SmartFileOrganizer.App.Services;
 
 public interface IDedupeService
 {
-    Task<List<DuplicateGroup>> FindDuplicatesAsync(IEnumerable<string> roots, IProgress<string>? progress, CancellationToken ct);
+    Task<List<DuplicateGroup>> FindDuplicatesAsync(IEnumerable<string> roots, IProgress<ScanProgress>? progress, CancellationToken ct);
 }

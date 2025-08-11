@@ -49,7 +49,7 @@ public class PlanService : IPlanService
     private record HardlinkOpDto(string LinkPath, string TargetExistingPath);
 
     // ----- Public API -----
-    public async Task<Plan> GeneratePlanAsync(FileNode map, string mode, CancellationToken ct)
+    public async Task<Plan> GeneratePlanApiCallAsync(FileNode map, string mode, CancellationToken ct)
     {
         var digest = ToDigest(map);
 

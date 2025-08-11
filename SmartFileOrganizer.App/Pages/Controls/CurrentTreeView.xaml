@@ -11,7 +11,7 @@
 		<conv:InverseBoolConverter x:Key="InverseBool" />
 	</ContentView.Resources>
 
-	<ScrollView>
+	
 		<VerticalStackLayout Padding="6" Spacing="4">
 			<!-- Root collection: an ObservableCollection<CurrentTreeNode> -->
 			<CollectionView ItemsSource="{Binding CurrentRoot}" SelectionMode="None">
@@ -75,5 +75,5 @@
 				</CollectionView.ItemTemplate>
 			</CollectionView>
 		</VerticalStackLayout>
-	</ScrollView>
+	
 </ContentView>
