@@ -2,11 +2,11 @@ namespace SmartFileOrganizer.App.Services;
 
 public static class PathGuards
 {
-    private static readonly string[] SystemHints = new[]
-    {
+    private static readonly string[] SystemHints =
+    [
         "/System/", "/Library/", "/bin/", "/sbin/", "/usr/", "/etc/", "/private/",
         "C:/Windows", "C:/Program Files", "C:/Program Files (x86)", "C:/Users/All Users",
-    };
+    ];
 
     public static bool IsSystemPath(string path)
     {

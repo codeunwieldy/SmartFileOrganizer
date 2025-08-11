@@ -1,6 +1,7 @@
 ﻿namespace SmartFileOrganizer.App.Models;
 
-public enum RuleActionKind { MoveToFolder, Ignore }
+public enum RuleActionKind
+{ MoveToFolder, Ignore }
 
 public class Rule
 {

@@ -1,16 +1,13 @@
-﻿using System.Collections.ObjectModel;
+﻿using SmartFileOrganizer.App.Services;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Input;
-using SmartFileOrganizer.App.Services;
-using static SmartFileOrganizer.App.Services.IExecutorService;
+using ConflictChoice = SmartFileOrganizer.App.Services.IExecutorService.ConflictChoice;
 
 namespace SmartFileOrganizer.App.Pages;
 
 public partial class ConflictResolverPage : ContentPage
 {
-    // Mirror the enum here so XAML can use x:Static cleanly without nested-interface type syntax.
-    public enum ConflictChoice { Skip, Rename, Overwrite }
-
     public class Row
     {
         public string Destination { get; init; } = "";
@@ -22,6 +19,7 @@ public partial class ConflictResolverPage : ContentPage
     public ObservableCollection<Row> Items { get; } = new();
 
     private Row? _selectedRow;
+
     public Row? SelectedRow
     {
         get => _selectedRow;
@@ -44,7 +42,6 @@ public partial class ConflictResolverPage : ContentPage
         foreach (var c in conflicts)
             Items.Add(new Row { Destination = c.Destination, Reason = c.Reason });
 
-        // Default select first
         SelectedRow = Items.FirstOrDefault();
 
         ApplyCommand = new Command(async () =>
@@ -52,7 +49,6 @@ public partial class ConflictResolverPage : ContentPage
             var results = Items
                 .Select(i => new IExecutorService.ConflictResolution(
                     i.Destination,
-                    // Map local enum → service enum
                     i.Choice switch
                     {
                         ConflictChoice.Skip => IExecutorService.ConflictChoice.Skip,
@@ -75,32 +71,20 @@ public partial class ConflictResolverPage : ContentPage
 public sealed class ConflictChoiceToIndexConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is ConflictResolverPage.ConflictChoice c ? c switch
+        => value is ConflictChoice c ? c switch
         {
-            ConflictResolverPage.ConflictChoice.Skip => 0,
-            ConflictResolverPage.ConflictChoice.Rename => 1,
-            ConflictResolverPage.ConflictChoice.Overwrite => 2,
+            ConflictChoice.Skip => 0,
+            ConflictChoice.Rename => 1,
+            ConflictChoice.Overwrite => 2,
             _ => 1
         } : 1;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => (value is int i) ? i switch
         {
-            0 => ConflictResolverPage.ConflictChoice.Skip,
-            1 => ConflictResolverPage.ConflictChoice.Rename,
-            2 => ConflictResolverPage.ConflictChoice.Overwrite,
-            _ => ConflictResolverPage.ConflictChoice.Rename
-        } : ConflictResolverPage.ConflictChoice.Rename;
-}
-
-/// <summary>
-/// Generic enum equality converter (optional; kept here in case you want to use it elsewhere)
-/// </summary>
-public sealed class EnumEqualsConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => Equals(value, parameter);
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
+            0 => ConflictChoice.Skip,
+            1 => ConflictChoice.Rename,
+            2 => ConflictChoice.Overwrite,
+            _ => ConflictChoice.Rename
+        } : ConflictChoice.Rename;
 }

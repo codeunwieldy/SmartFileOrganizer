@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 
 namespace SmartFileOrganizer.App.Services;
+
 public class FileHasher : IHashingService
 {
     public async Task<string> HashFileAsync(string path, int partialBytes = 0, CancellationToken ct = default)

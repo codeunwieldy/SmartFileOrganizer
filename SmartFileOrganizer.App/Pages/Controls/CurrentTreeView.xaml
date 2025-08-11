@@ -1,69 +1,79 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentView
     x:Class="SmartFileOrganizer.App.Pages.Controls.CurrentTreeView"
+    x:Name="Self"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit">
+    xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+    xmlns:conv="clr-namespace:SmartFileOrganizer.App.Converters">
 
-    <ScrollView>
-        <VerticalStackLayout Padding="6">
-            <CollectionView ItemsSource="{Binding CurrentRoot}"
-                            SelectionMode="None">
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <!-- One node -->
-                        <Grid Padding="6" ColumnDefinitions="*,Auto">
-                            <!-- Expander for folders -->
-                            <toolkit:Expander IsExpanded="False"
-                                              IsVisible="{Binding IsFolder}">
-                                <toolkit:Expander.Header>
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <Label Text="{Binding Name}" />
-                                        <Label Grid.Column="1"
+	<ContentView.Resources>
+		<conv:InverseBoolConverter x:Key="InverseBool" />
+	</ContentView.Resources>
+
+	<ScrollView>
+		<VerticalStackLayout Padding="6" Spacing="4">
+			<!-- Root collection: an ObservableCollection<CurrentTreeNode> -->
+			<CollectionView ItemsSource="{Binding CurrentRoot}" SelectionMode="None">
+				<CollectionView.ItemTemplate>
+					<DataTemplate>
+						<!-- FOLDER NODE -->
+						<Grid Padding="4" ColumnDefinitions="*,Auto">
+							<toolkit:Expander IsExpanded="False" IsVisible="{Binding IsFolder}">
+								<toolkit:Expander.Header>
+									<Grid ColumnDefinitions="*,Auto" Padding="2">
+										<Grid.GestureRecognizers>
+											<TapGestureRecognizer
+                                                Command="{Binding Source={x:Reference Self}, Path=BindingContext.SelectCurrentCommand}"
+                                                CommandParameter="{Binding FullPath}" />
+											<DragGestureRecognizer CanDrag="True"
+                                                                   DragStarting="OnDragStarting" />
+											<DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
+										</Grid.GestureRecognizers>
+										<Label Text="{Binding Name}" />
+										<Label Grid.Column="1"
                                                Text="{Binding FileCount, StringFormat='({0} files)'}"
                                                IsVisible="{Binding IsFolder}" />
-                                    </Grid>
-                                </toolkit:Expander.Header>
+									</Grid>
+								</toolkit:Expander.Header>
 
-                                <!-- Child nodes (recursive layout) -->
-                                <CollectionView ItemsSource="{Binding Children}"
-                                                SelectionMode="None"
-                                                Margin="20,0,0,0">
-                                    <CollectionView.ItemTemplate>
-                                        <DataTemplate>
-                                            <ContentView>
-                                                <ContentView.GestureRecognizers>
-                                                    <TapGestureRecognizer Tapped="OnTapped" />
-                                                    <DragGestureRecognizer CanDrag="True" DragStarting="OnDragStarting" />
-                                                    <DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
-                                                </ContentView.GestureRecognizers>
+								<!-- Children (recursive) -->
+								<CollectionView ItemsSource="{Binding Children}" SelectionMode="None" Margin="20,0,0,0">
+									<CollectionView.ItemTemplate>
+										<DataTemplate>
+											<Grid ColumnDefinitions="*,Auto" Padding="2">
+												<Grid.GestureRecognizers>
+													<TapGestureRecognizer
+                                                        Command="{Binding Source={x:Reference Self}, Path=BindingContext.SelectCurrentCommand}"
+                                                        CommandParameter="{Binding FullPath}" />
+													<DragGestureRecognizer CanDrag="True" DragStarting="OnDragStarting" />
+													<DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
+												</Grid.GestureRecognizers>
+												<Label Text="{Binding Name}" />
+												<Label Grid.Column="1"
+                                                       Text="{Binding FileCount, StringFormat='({0} files)'}"
+                                                       IsVisible="{Binding IsFolder}" />
+											</Grid>
+										</DataTemplate>
+									</CollectionView.ItemTemplate>
+								</CollectionView>
+							</toolkit:Expander>
 
-                                                <Grid ColumnDefinitions="*,Auto" Padding="4">
-                                                    <Label Text="{Binding Name}" />
-                                                    <Label Grid.Column="1"
-                                                           Text="{Binding FileCount, StringFormat='({0} files)'}"
-                                                           IsVisible="{Binding IsFolder}" />
-                                                </Grid>
-                                            </ContentView>
-                                        </DataTemplate>
-                                    </CollectionView.ItemTemplate>
-                                </CollectionView>
-                            </toolkit:Expander>
-
-                            <!-- Files (no expander) -->
-                            <ContentView IsVisible="{Binding IsFolder, Converter={StaticResource InverseBoolConverter}}">
-                                <ContentView.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnTapped" />
-                                    <DragGestureRecognizer CanDrag="True" DragStarting="OnDragStarting" />
-                                    <DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
-                                </ContentView.GestureRecognizers>
-
-                                <Label Text="{Binding Name}" />
-                            </ContentView>
-                        </Grid>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
-        </VerticalStackLayout>
-    </ScrollView>
+							<!-- FILE NODE -->
+							<ContentView IsVisible="{Binding IsFolder, Converter={StaticResource InverseBool}}">
+								<ContentView.GestureRecognizers>
+									<TapGestureRecognizer
+                                        Command="{Binding Source={x:Reference Self}, Path=BindingContext.SelectCurrentCommand}"
+                                        CommandParameter="{Binding FullPath}" />
+									<DragGestureRecognizer CanDrag="True" DragStarting="OnDragStarting" />
+									<DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
+								</ContentView.GestureRecognizers>
+								<Label Text="{Binding Name}" />
+							</ContentView>
+						</Grid>
+					</DataTemplate>
+				</CollectionView.ItemTemplate>
+			</CollectionView>
+		</VerticalStackLayout>
+	</ScrollView>
 </ContentView>

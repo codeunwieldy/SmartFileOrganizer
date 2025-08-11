@@ -2,20 +2,20 @@
 using SmartFileOrganizer.App.Models;
 using SmartFileOrganizer.App.Services;
 using System.Collections.ObjectModel;
-using System.Globalization;
 
 namespace SmartFileOrganizer.App.Pages;
 
 public partial class DuplicatesPage : ContentPage
 {
     // === Result payload ===
-    public enum DedupePolicy { MoveNextToKept, HardlinkToKept, MoveToArchive }
+    public enum DedupePolicy
+    { MoveNextToKept, HardlinkToKept, MoveToArchive }
 
     public class ResultPayload
     {
         public bool Apply { get; init; }
         public DedupePolicy Policy { get; init; }
-        public Dictionary<string, string> MoveMap { get; init; } = new();              // src -> dest
+        public Dictionary<string, string> MoveMap { get; init; } = [];              // src -> dest
         public List<(string LinkPath, string Target)> Hardlinks { get; init; } = new();// hardlink policy
         public string? ArchiveFolder { get; init; }
     }
@@ -23,8 +23,8 @@ public partial class DuplicatesPage : ContentPage
     // === Per-group VM for display ===
     public class GroupVM
     {
-        public required string Header { get; init; }
-        public required ObservableCollection<string> Items { get; init; }
+        public string Header { get; init; }
+        public ObservableCollection<string> Items { get; init; }
         public string? Kept { get; set; }
     }
 
@@ -61,7 +61,7 @@ public partial class DuplicatesPage : ContentPage
         // “Keep here” command
         MarkKeepHereCommand = new AsyncRelayCommand<string>(async path =>
         {
-            var group = ViewGroups.FirstOrDefault(v => v.Items.Contains(path));
+            var group = ViewGroups.FirstOrDefault(v => v.Items.Contains(path!));
             if (group is not null)
             {
                 group.Kept = path;

@@ -32,6 +32,7 @@ public class ExecutorService : IExecutorService
                             ? r.NewDestinationIfRename
                             : EnsureUnique(dest);
                         break;
+
                     case IExecutorService.ConflictChoice.Overwrite:
                         try { File.Delete(dest); } catch { dest = EnsureUnique(dest); }
                         break;
@@ -216,8 +217,10 @@ public class ExecutorService : IExecutorService
     }
 
 #if WINDOWS
+
     [DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool CreateHardLink(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+
 #endif
 
     private static string EnsureUnique(string desired)

@@ -9,6 +9,7 @@ public class PlanService : IPlanService
     private readonly Func<PlanPreferences>? _prefsProvider;
 
     public PlanService(HttpClient http) => _http = http;
+
     public PlanService(HttpClient http, Func<PlanPreferences> prefsProvider)
     {
         _http = http; _prefsProvider = prefsProvider;

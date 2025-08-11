@@ -6,4 +6,3 @@ public sealed class DuplicateGroup
     public long SizeBytes { get; init; }
     public List<string> Paths { get; } = new(); // get-only, but the list itself is mutable
 }
-

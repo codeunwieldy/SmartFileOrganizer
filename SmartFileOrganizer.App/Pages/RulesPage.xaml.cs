@@ -2,7 +2,6 @@
 using SmartFileOrganizer.App.Models;
 using SmartFileOrganizer.App.Services;
 using System.Collections.ObjectModel;
-using System.IO; // <-- add this
 
 namespace SmartFileOrganizer.App.Pages;
 
@@ -15,6 +14,7 @@ public partial class RulesPage : ContentPage
             get => Action == RuleActionKind.MoveToFolder ? 0 : 1;
             set => Action = (value == 0 ? RuleActionKind.MoveToFolder : RuleActionKind.Ignore);
         }
+
         public bool IsMove => Action == RuleActionKind.MoveToFolder;
     }
 
@@ -168,5 +168,3 @@ public partial class RulesPage : ContentPage
             "OK");
     }
 }
-
-

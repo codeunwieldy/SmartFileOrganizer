@@ -1,5 +1,5 @@
-﻿using System.Text.RegularExpressions;
-using SmartFileOrganizer.App.Models;
+﻿using SmartFileOrganizer.App.Models;
+using System.Text.RegularExpressions;
 
 namespace SmartFileOrganizer.App.Services;
 
@@ -80,4 +80,3 @@ public class RuleEngine : IRuleEngine
         return $"^{p}$";
     }
 }
-

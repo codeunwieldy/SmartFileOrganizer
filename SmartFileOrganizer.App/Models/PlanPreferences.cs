@@ -8,4 +8,3 @@ public class PlanPreferences
     public bool KeepFolderNames { get; set; } = true; // Preserve existing parent names when sensible
     public bool FlattenSmallFolders { get; set; } = true; // Merge folders with few files
 }
-

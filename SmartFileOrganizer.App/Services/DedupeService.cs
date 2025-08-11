@@ -1,9 +1,11 @@
 ﻿using SmartFileOrganizer.App.Models;
 
 namespace SmartFileOrganizer.App.Services;
+
 public class DedupeService : IDedupeService
 {
     private readonly IHashingService _hasher;
+
     public DedupeService(IHashingService hasher) => _hasher = hasher;
 
     public async Task<List<DuplicateGroup>> FindDuplicatesAsync(IEnumerable<string> roots, IProgress<string>? progress, CancellationToken ct)
@@ -62,7 +64,6 @@ public class DedupeService : IDedupeService
                         group.Paths.Add(path);
 
                     groups.Add(group);
-
                 }
             }
         }
@@ -84,4 +85,3 @@ public class DedupeService : IDedupeService
         }
     }
 }
-

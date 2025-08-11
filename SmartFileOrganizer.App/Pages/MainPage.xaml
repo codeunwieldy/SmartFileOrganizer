@@ -3,92 +3,166 @@
     x:Class="SmartFileOrganizer.App.Pages.MainPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:SmartFileOrganizer.App.ViewModels"
+    x:Name="MainRoot"
     Title="Smart File Organizer"
-    x:Name="MainRoot">
+    x:DataType="vm:MainViewModel">
 
-    <!-- BindingContext set in code-behind via DI -->
+	<!-- Page-wide styles (hover/pressed/disabled) -->
+	<ContentPage.Resources>
+		<Style TargetType="Button">
+			<Setter Property="Padding" Value="10,8"/>
+			<Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#F3F3F3, Dark=#272727}"/>
+			<Setter Property="CornerRadius" Value="8"/>
+			<Setter Property="VisualStateManager.VisualStateGroups">
+				<VisualStateGroupList>
+					<VisualStateGroup x:Name="CommonStates">
+						<VisualState x:Name="Normal"/>
+						<VisualState x:Name="PointerOver">
+							<VisualState.Setters>
+								<Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#EAEAEA, Dark=#303030}"/>
+								<Setter Property="Scale" Value="1.02"/>
+							</VisualState.Setters>
+						</VisualState>
+						<VisualState x:Name="Pressed">
+							<VisualState.Setters>
+								<Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#DCDCDC, Dark=#383838}"/>
+								<Setter Property="Scale" Value="0.98"/>
+							</VisualState.Setters>
+						</VisualState>
+						<VisualState x:Name="Disabled">
+							<VisualState.Setters>
+								<Setter Property="Opacity" Value="0.55"/>
+							</VisualState.Setters>
+						</VisualState>
+					</VisualStateGroup>
+				</VisualStateGroupList>
+			</Setter>
+		</Style>
+	</ContentPage.Resources>
 
-    <ScrollView>
-        <VerticalStackLayout Spacing="14" Padding="20">
-            <Label Text="Choose Mode" FontSize="20" />
+	<ScrollView>
+		<VerticalStackLayout Spacing="14" Padding="20">
 
-            <Grid ColumnDefinitions="*,*,*">
-                <Button Text="Desktop"
-                        Command="{Binding GeneratePlanAsyncCommand}"
+			<Label Text="Choose Mode" FontSize="20" />
+
+			<!-- Mode buttons -->
+			<Grid ColumnDefinitions="*,*,*">
+				<Button Text="Desktop"
+                        Command="{Binding GeneratePlanCommand}"
                         CommandParameter="desktop" />
-                <Button Grid.Column="1"
+				<Button Grid.Column="1"
                         Text="Downloads"
-                        Command="{Binding GeneratePlanAsyncCommand}"
+                        Command="{Binding GeneratePlanCommand}"
                         CommandParameter="downloads" />
-                <Button Grid.Column="2"
+				<Button Grid.Column="2"
                         Text="Everything"
-                        Command="{Binding GeneratePlanAsyncCommand}"
+                        Command="{Binding GeneratePlanCommand}"
                         CommandParameter="all" />
-            </Grid>
+			</Grid>
 
-            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
-            <Label Text="{Binding Status}" />
+			<!-- Busy + status -->
+			<Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" VerticalOptions="Center">
+				<ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+				<Label Grid.Column="1" Text="{Binding Status}" LineBreakMode="TailTruncation" />
+			</Grid>
 
-            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                <Button Text="Advanced Planner" Command="{Binding OpenAdvancedAsyncCommand}" />
-                <Button Grid.Column="1" Text="One-click Clean" Command="{Binding ExecuteAsyncCommand}" />
-                <Button Grid.Row="1" Text="Revert" Command="{Binding RevertAsyncCommand}" />
-                <Button Grid.Row="1" Grid.Column="1" Text="Toggle Theme" Clicked="OnToggleTheme" />
-                <Button Text="Rules" Clicked="OnOpenRules" />
-            </Grid>
+			<!-- Tiny console of recent progress lines -->
+			<Border StrokeThickness="1" Stroke="#33000000" Padding="6" IsVisible="{Binding IsBusy}">
+				<VerticalStackLayout Spacing="4">
+					<Label Text="Progress" FontAttributes="Bold" FontSize="12"/>
+					<CollectionView x:Name="ProgressList"
+                                    HeightRequest="140"
+                                    ItemsSource="{Binding ProgressLines}">
+						<CollectionView.ItemsLayout>
+							<LinearItemsLayout Orientation="Vertical" ItemSpacing="2"/>
+						</CollectionView.ItemsLayout>
+						<CollectionView.ItemTemplate>
+							<DataTemplate>
+								<Label Text="{Binding .}" FontSize="12" LineBreakMode="TailTruncation"/>
+							</DataTemplate>
+						</CollectionView.ItemTemplate>
+					</CollectionView>
+				</VerticalStackLayout>
+			</Border>
 
-            <HorizontalStackLayout Spacing="8">
-                <Button Text="Choose Folders…" Command="{Binding AddFolderAsyncCommand}" />
-                <Button Text="Cancel" Command="{Binding CancelOpsCommand}" IsEnabled="{Binding IsBusy}" />
-            </HorizontalStackLayout>
+			<!-- Main actions -->
+			<Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+				<Button Text="Advanced Planner" Command="{Binding OpenAdvancedCommand}" />
+				<Button Grid.Column="1" Text="One-click Clean" Command="{Binding ExecuteCommand}" />
+				<Button Grid.Row="1" Text="Revert" Command="{Binding RevertCommand}" />
+				<Button Grid.Row="1" Grid.Column="1" Text="Toggle Theme" Clicked="OnToggleTheme" />
+				<Button Text="Rules" Clicked="OnOpenRules" />
+			</Grid>
 
-            <!-- Replaces ItemsControl with BindableLayout -->
-            <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center" Margin="0,8,0,0"
+			<!-- Folder actions -->
+			<HorizontalStackLayout Spacing="8">
+				<Button Text="Choose Folders…" Command="{Binding AddFolderCommand}" />
+				<Button Text="Cancel" Command="{Binding CancelOpsCommand}" IsEnabled="{Binding IsBusy}" />
+			</HorizontalStackLayout>
+
+			<!-- Selected roots chips -->
+			<FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center" Margin="0,8,0,0"
                         BindableLayout.ItemsSource="{Binding SelectedRoots}">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate>
-                        <Frame Padding="6" Margin="4" BackgroundColor="#1A000000" CornerRadius="12">
-                            <HorizontalStackLayout Spacing="6">
-                                <Label Text="{Binding .}" LineBreakMode="TailTruncation" />
-                                <Button Text="×"
+				<BindableLayout.ItemTemplate>
+					<DataTemplate>
+						<Border Padding="6" Margin="4" Background="#1A000000">
+							<Border.StrokeShape>
+								<RoundRectangle CornerRadius="12" />
+							</Border.StrokeShape>
+							<HorizontalStackLayout Spacing="6">
+								<Label Text="{Binding .}" LineBreakMode="TailTruncation" />
+								<Button Text="×"
                                         Padding="0"
                                         Command="{Binding Source={x:Reference MainRoot}, Path=BindingContext.RemoveRootCommand}"
                                         CommandParameter="{Binding .}" />
-                            </HorizontalStackLayout>
-                        </Frame>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </FlexLayout>
+							</HorizontalStackLayout>
+						</Border>
+					</DataTemplate>
+				</BindableLayout.ItemTemplate>
+			</FlexLayout>
 
-            <Frame Padding="10" Margin="0,8,0,8" BorderColor="#33000000" CornerRadius="10">
-                <VerticalStackLayout Spacing="6">
-                    <Label Text="Organization preferences" FontAttributes="Bold" />
-                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
-                        <Switch Grid.Row="0" Grid.Column="0" IsToggled="{Binding Preferences.GroupByType}" Toggled="OnPrefChanged"/>
-                        <Label  Grid.Row="0" Grid.Column="1" Text="Group by Type (Images, Docs, Archives…)" />
+			<!-- Organization preferences -->
+			<Border Padding="10" Margin="0,8,0,8" Stroke="#33000000" StrokeThickness="1">
+				<Border.StrokeShape>
+					<RoundRectangle CornerRadius="10" />
+				</Border.StrokeShape>
+				<VerticalStackLayout Spacing="6">
+					<Label Text="Organization preferences" FontAttributes="Bold" />
+					<Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+						<Switch Grid.Row="0" Grid.Column="0" IsToggled="{Binding Preferences.GroupByType}" Toggled="OnPrefChanged"/>
+						<Label  Grid.Row="0" Grid.Column="1" Text="Group by Type (Images, Docs, Archives…)" />
 
-                        <Switch Grid.Row="1" Grid.Column="0" IsToggled="{Binding Preferences.GroupByDate}" Toggled="OnPrefChanged"/>
-                        <Label  Grid.Row="1" Grid.Column="1" Text="Group by Date (YYYY / YYYY-MM)" />
+						<Switch Grid.Row="1" Grid.Column="0" IsToggled="{Binding Preferences.GroupByDate}" Toggled="OnPrefChanged"/>
+						<Label  Grid.Row="1" Grid.Column="1" Text="Group by Date (YYYY / YYYY-MM)" />
 
-                        <Switch Grid.Row="2" Grid.Column="0" IsToggled="{Binding Preferences.GroupByProject}" Toggled="OnPrefChanged"/>
-                        <Label  Grid.Row="2" Grid.Column="1" Text="Group by Project (infer from names/paths)" />
+						<Switch Grid.Row="2" Grid.Column="0" IsToggled="{Binding Preferences.GroupByProject}" Toggled="OnPrefChanged"/>
+						<Label  Grid.Row="2" Grid.Column="1" Text="Group by Project (infer from names/paths)" />
 
-                        <Switch Grid.Row="3" Grid.Column="0" IsToggled="{Binding Preferences.KeepFolderNames}" Toggled="OnPrefChanged"/>
-                        <Label  Grid.Row="3" Grid.Column="1" Text="Prefer existing folder names" />
+						<Switch Grid.Row="3" Grid.Column="0" IsToggled="{Binding Preferences.KeepFolderNames}" Toggled="OnPrefChanged"/>
+						<Label  Grid.Row="3" Grid.Column="1" Text="Prefer existing folder names" />
 
-                        <Switch Grid.Row="4" Grid.Column="0" IsToggled="{Binding Preferences.FlattenSmallFolders}" Toggled="OnPrefChanged"/>
-                        <Label  Grid.Row="4" Grid.Column="1" Text="Flatten tiny folders" />
-                    </Grid>
-                </VerticalStackLayout>
-            </Frame>
+						<Switch Grid.Row="4" Grid.Column="0" IsToggled="{Binding Preferences.FlattenSmallFolders}" Toggled="OnPrefChanged"/>
+						<Label  Grid.Row="4" Grid.Column="1" Text="Flatten tiny folders" />
+					</Grid>
+				</VerticalStackLayout>
+			</Border>
 
-            <Frame Padding="10" BorderColor="#33000000" CornerRadius="8">
-                <VerticalStackLayout Spacing="6">
-                    <Label Text="Visual Overview (sample)" FontAttributes="Bold" />
-                    <BoxView HeightRequest="100" BackgroundColor="#1A000000" />
-                    <Label Text="(Wire in a tree/graph preview of final structure here.)" FontSize="12" />
-                </VerticalStackLayout>
-            </Frame>
-        </VerticalStackLayout>
-    </ScrollView>
+			<!-- Visual overview -->
+			<Border Padding="10" Stroke="#33000000" StrokeThickness="1">
+				<Border.StrokeShape>
+					<RoundRectangle CornerRadius="8" />
+				</Border.StrokeShape>
+				<VerticalStackLayout Spacing="6">
+					<Label Text="Visual Overview (destinations in current plan)" FontAttributes="Bold" />
+					<GraphicsView HeightRequest="180" Drawable="{Binding PlanPreviewDrawable}" />
+					<Label Text="(Updates after you Generate Plan.)" FontSize="12" />
+				</VerticalStackLayout>
+			</Border>
+
+		</VerticalStackLayout>
+	</ScrollView>
 </ContentPage>
+
+
+

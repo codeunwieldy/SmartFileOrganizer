@@ -1,5 +1,5 @@
-﻿using System.Text.Json;
-using SmartFileOrganizer.App.Models;
+﻿using SmartFileOrganizer.App.Models;
+using System.Text.Json;
 
 namespace SmartFileOrganizer.App.Services;
 
@@ -7,6 +7,7 @@ public class RuleStore : IRuleStore
 {
     private static string Dir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SFO", "Config");
+
     private static string PathFile => Path.Combine(Dir, "rules.json");
 
     public async Task<RuleSet> LoadAsync(CancellationToken ct = default)
@@ -27,4 +28,3 @@ public class RuleStore : IRuleStore
         await File.WriteAllTextAsync(PathFile, json, ct);
     }
 }
-

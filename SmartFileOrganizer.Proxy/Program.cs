@@ -64,12 +64,26 @@ app.MapPost("/plan", async (PlanRequest req) =>
 });
 
 
-app.MapPost("/commit", async (CleanPlanDto plan) =>
+app.MapPost("/commit", (CleanPlanDto plan) =>
 {
     // Here you could store plans, audit usage, attach user id, etc.
     // For now just echo back and pretend we “committed”.
     return Results.Json(new { ok = true, planId = plan.PlanId ?? Guid.NewGuid().ToString("N") });
 });
+
+app.MapGet("/", () => Results.Ok(new
+{
+    service = "SmartFileOrganizer Proxy",
+    status = "running"
+}));
+app.MapGet("/.well-known/appspecific/com.chrome.devtools.json",
+    () => Results.Json(new { })); // or Results.NoContent()
+app.MapGet("/health", () => Results.Ok(new
+{
+    service = "SmartFileOrganizer Proxy",
+    status = "healthy",
+    timestamp = DateTime.UtcNow
+}));
 
 app.Run();
 

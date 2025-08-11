@@ -13,4 +13,3 @@ public interface IOverviewService
 {
     OverviewResult Build(Plan executedPlan);
 }
-

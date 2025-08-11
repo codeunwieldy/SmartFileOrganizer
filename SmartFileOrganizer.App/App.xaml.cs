@@ -4,10 +4,22 @@ namespace SmartFileOrganizer.App;
 
 public partial class App : Application
 {
-    public App(MainPage page)
+    private readonly MainPage _mainPage;
+
+    public App(MainPage mainPage)
     {
         InitializeComponent();
-        MainPage = new NavigationPage(page);
-        UserAppTheme = AppTheme.Light; // or AppTheme.Dark / Unspecified
+        _mainPage = mainPage;
+    }
+
+    protected override Window CreateWindow(IActivationState? activationState)
+    {
+        var window = new Window(new NavigationPage(_mainPage))
+        {
+#if WINDOWS
+            Title = "Smart File Organizer"
+#endif
+        };
+        return window;
     }
 }
