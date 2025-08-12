@@ -14,8 +14,9 @@
     <ApplicationId>com.sfo.app</ApplicationId>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
 
-    <!-- Packaged (MSIX). Do NOT force WindowsAppSDKSelfContained here. -->
+    <!-- Packaged (MSIX). Force self-contained Windows App SDK to avoid deployment issues -->
     <WindowsPackageType>MSIX</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
     <PackageCertificateThumbprint>00639ADF9EFCCCEE4B87BB2E094493BAD9028CAD</PackageCertificateThumbprint>
 

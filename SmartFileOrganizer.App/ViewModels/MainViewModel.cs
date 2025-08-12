@@ -53,6 +53,14 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial bool CanPause { get; set; } = false;
     [ObservableProperty] public partial bool IsPaused { get; set; } = false;
     [ObservableProperty] public partial bool CanCancel { get; set; } = false;
+    [ObservableProperty] public partial string CurrentMode { get; set; } = "";
+    [ObservableProperty] public partial bool IsModeVisible { get; set; } = false;
+
+    // Interactive tree properties
+    [ObservableProperty] public partial IDrawable? TreeDrawable { get; set; }
+    [ObservableProperty] public partial double TreeZoom { get; set; } = 1.0;
+    [ObservableProperty] public partial double TreePanX { get; set; } = 0.0;
+    [ObservableProperty] public partial double TreePanY { get; set; } = 0.0;
 
     IDispatcherTimer? _barTimer;
 
@@ -90,6 +98,15 @@ public partial class MainViewModel : ObservableObject
 
         ProgressLinesClear();
         AppendProgress("Generate plan started…");
+
+        // Set current mode for UI display
+        CurrentMode = mode switch
+        {
+            "desktop" => "Desktop",
+            "downloads" => "Downloads",
+            _ => "Everything"
+        };
+        IsModeVisible = true;
 
         IsProgressVisible = true;
         CanCancel = true;
@@ -132,11 +149,23 @@ public partial class MainViewModel : ObservableObject
 
             // ---- AI PLAN ----
             AppendProgress("Planning (AI)…");
-            var aiPlan = await _planner.GeneratePlanApiCallAsync(scan.RootTree, mode, _cts.Token);
+            try
+            {
+                var aiPlan = await _planner.GeneratePlanApiCallAsync(scan.RootTree, mode, _cts.Token);
+                aiPlan.Moves = [.. aiPlan.Moves.Where(m => !ruleEval.ClaimedSources.Contains(m.Source))];
+                mergedPlan.Moves.AddRange(aiPlan.Moves);
+                mergedPlan.DeleteEmptyDirectories.AddRange(aiPlan.DeleteEmptyDirectories);
+            }
+            catch (Exception aiEx)
+            {
+                AppendProgress($"AI planning failed ({aiEx.Message}), using default organization...");
 
-            aiPlan.Moves = [.. aiPlan.Moves.Where(m => !ruleEval.ClaimedSources.Contains(m.Source))];
-            mergedPlan.Moves.AddRange(aiPlan.Moves);
-            mergedPlan.DeleteEmptyDirectories.AddRange(aiPlan.DeleteEmptyDirectories);
+                // Fallback: Create a simple default plan based on file types
+                var defaultPlan = CreateDefaultPlan(scan.RootTree, mode, roots.FirstOrDefault() ?? "");
+                defaultPlan.Moves = [.. defaultPlan.Moves.Where(m => !ruleEval.ClaimedSources.Contains(m.Source))];
+                mergedPlan.Moves.AddRange(defaultPlan.Moves);
+                mergedPlan.DeleteEmptyDirectories.AddRange(defaultPlan.DeleteEmptyDirectories);
+            }
 
             // ---- DUPLICATES ----
             AppendProgress("Checking duplicates…");
@@ -149,28 +178,59 @@ public partial class MainViewModel : ObservableObject
             if (dedupeGroups.Count > 0)
             {
                 AppendProgress($"Duplicates: {dedupeGroups.Count} groups found.");
-                var dupPage = new DuplicatesPage(dedupeGroups)
+                
+                // Create and configure the duplicates page
+                var dupPage = new DuplicatesPage(dedupeGroups);
+                var result = new TaskCompletionSource<DuplicatesPage.ResultPayload>();
+                dupPage.Result = result;
+
+                // Use Shell navigation instead of NavigationService for shell content
+                try
                 {
-                    Result = new TaskCompletionSource<DuplicatesPage.ResultPayload>()
-                };
+                    await Shell.Current.GoToAsync("//DuplicatesPage");
+                    
+                    // Find the actual duplicates page instance in the shell
+                    var currentPage = Shell.Current.CurrentPage;
+                    if (currentPage is DuplicatesPage actualDupPage)
+                    {
+                        actualDupPage.ViewGroups.Clear();
+                        foreach (var g in dedupeGroups)
+                        {
+                            actualDupPage.ViewGroups.Add(new DuplicatesPage.GroupVM
+                            {
+                                Header = $"{g.Paths.Count} × {g.SizeBytes / 1024} KB — {g.Hash[..8]}…",
+                                Items = new System.Collections.ObjectModel.ObservableCollection<string>(g.Paths)
+                            });
+                        }
+                        actualDupPage.Result = result;
+                    }
+                    
+                    var duplicateResult = await result.Task;
 
-                await Shell.Current.GoToAsync("//DuplicatesPage");
-                var result = await dupPage.Result.Task;
+                    if (duplicateResult.Apply)
+                    {
+                        foreach (var kv in duplicateResult.MoveMap)
+                            mergedPlan.Moves.Add(new MoveOp(kv.Key, kv.Value));
 
-                if (result.Apply)
-                {
-                    foreach (var kv in result.MoveMap)
-                        mergedPlan.Moves.Add(new MoveOp(kv.Key, kv.Value));
+                        foreach (var hl in duplicateResult.Hardlinks)
+                            mergedPlan.Hardlinks.Add(new HardlinkOp(hl.LinkPath, hl.Target));
 
-                    foreach (var hl in result.Hardlinks)
-                        mergedPlan.Hardlinks.Add(new HardlinkOp(hl.LinkPath, hl.Target));
-
-                    StatusText = $"Duplicates resolved: {result.MoveMap.Count} moves, {result.Hardlinks.Count} links";
-                    AppendProgress(StatusText);
+                        StatusText = $"Duplicates resolved: {duplicateResult.MoveMap.Count} moves, {duplicateResult.Hardlinks.Count} links";
+                        AppendProgress(StatusText);
+                    }
+                    else
+                    {
+                        AppendProgress("Duplicates: skipped by user.");
+                    }
+                    
+                    // Navigate back to main page
+                    await Shell.Current.GoToAsync("//MainPage");
                 }
-                else
+                catch (Exception navEx)
                 {
-                    AppendProgress("Duplicates: skipped by user.");
+                    AppendProgress($"Navigation error: {navEx.Message}");
+                    // Skip duplicates processing if navigation fails
+                    AppendProgress("Duplicates: skipped due to navigation error.");
                 }
             }
             else
@@ -206,6 +266,8 @@ public partial class MainViewModel : ObservableObject
             ProgressValue = 0;
             StatusText = "Ready";
             SubStatusText = "";
+            CurrentMode = "";
+            IsModeVisible = false;
         }
     }
 
@@ -217,52 +279,137 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public void SelectTreeNode(object nodeData)
+    {
+        if (nodeData is CurrentTreeNode node)
+        {
+            CurrentBreadcrumb = node.FullPath;
+            AppendProgress($"Selected: {node.Name} ({node.FullPath})");
+
+            // If it's a folder, we could expand/collapse it
+            if (node.IsFolder)
+            {
+                node.IsExpanded = !node.IsExpanded;
+                RefreshTreeView();
+            }
+        }
+    }
+
+    [RelayCommand]
+    public void ZoomTree(double zoomDelta)
+    {
+        TreeZoom = Math.Max(0.1, Math.Min(5.0, TreeZoom + zoomDelta));
+        RefreshTreeView();
+    }
+
+    [RelayCommand]
+    public void PanTree(Microsoft.Maui.Graphics.Point delta)
+    {
+        TreePanX += delta.X;
+        TreePanY += delta.Y;
+        RefreshTreeView();
+    }
+
+    [RelayCommand]
+    public void ResetTreeView()
+    {
+        TreeZoom = 1.0;
+        TreePanX = 0.0;
+        TreePanY = 0.0;
+        RefreshTreeView();
+    }
+
+    public void RefreshTreeView()
+    {
+        if (CurrentRoot.Any())
+        {
+            TreeDrawable = new InteractiveTreeDrawable(CurrentRoot, TreeZoom, TreePanX, TreePanY, this);
+        }
+    }
+
+    [RelayCommand]
     public async Task ExecuteAsync()
     {
-        if (CurrentPlan is null) return;
+        // Check if we have a plan first
+        if (CurrentPlan is null)
+        {
+            AppendProgress("No plan available. Please generate a plan first by clicking 'Desktop', 'Downloads', or 'Everything'.");
+            StatusText = "No plan available";
+            
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                await Application.Current?.MainPage?.DisplayAlert("No Plan", "Please generate a plan first by scanning files.", "OK")!;
+            });
+            return;
+        }
+
+        // Check if plan has any moves
+        if (CurrentPlan.Moves.Count == 0 && CurrentPlan.Hardlinks.Count == 0)
+        {
+            AppendProgress("Plan has no moves. Nothing to execute.");
+            StatusText = "No moves in plan";
+            
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                await Application.Current?.MainPage?.DisplayAlert("Empty Plan", "The current plan has no file moves to execute.", "OK")!;
+            });
+            return;
+        }
 
         AppendProgress("Execute plan…");
 
-        var conflicts = await _executor.DryRunAsync(CurrentPlan, CancellationToken.None);
-        IEnumerable<ConflictResolution> resolutions = [];
-
-        if (conflicts.Count > 0)
+        try
         {
-            AppendProgress($"Conflicts: {conflicts.Count}");
-            var page = new ConflictResolverPage(conflicts)
+            var conflicts = await _executor.DryRunAsync(CurrentPlan, CancellationToken.None);
+            IEnumerable<ConflictResolution> resolutions = [];
+
+            if (conflicts.Count > 0)
             {
-                ResolveTask = new TaskCompletionSource<List<ConflictResolution>>()
-            };
-            await _nav.PushAsync(page);
-            resolutions = await page.ResolveTask.Task;
+                AppendProgress($"Conflicts: {conflicts.Count}");
+                var page = new ConflictResolverPage(conflicts)
+                {
+                    ResolveTask = new TaskCompletionSource<List<ConflictResolution>>()
+                };
+                await _nav.PushAsync(page);
+                resolutions = await page.ResolveTask.Task;
+            }
+
+            IsProgressVisible = true;
+            CanCancel = true;
+            CanPause = true; // Enable pause when operation starts
+
+            var applyProgress = new Progress<ScanProgress>(ReportProgress);
+            LastSnapshot = await _executor.ExecuteAsync(CurrentPlan, resolutions, applyProgress, _cts?.Token ?? CancellationToken.None);
+            await _snapshots.SaveAsync(LastSnapshot);
+
+            // Final completed state
+            ReportProgress(new ScanProgress { Stage = JobStage.Completed, Message = "Completed." });
+            await Task.Delay(1000);
+
+            // Navigate to overview
+            await Shell.Current.GoToAsync("//OverviewPage");
         }
-
-        IsProgressVisible = true;
-        CanCancel = true;
-        CanPause = true; // Enable pause when operation starts
-
-        var applyProgress = new Progress<ScanProgress>(ReportProgress); // Changed type here
-        LastSnapshot = await _executor.ExecuteAsync(CurrentPlan, resolutions, applyProgress, _cts.Token);
-        await _snapshots.SaveAsync(LastSnapshot);
-
-        // Final completed state
-        ReportProgress(new ScanProgress { Stage = JobStage.Completed, Message = "Completed." });
-        await Task.Delay(1000);
-
-        var overview = _overview.Build(CurrentPlan!);
-        var firstDest = CurrentPlan!.Moves
-            .Select(m => Path.GetDirectoryName(m.Destination))
-            .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
-        await Shell.Current.GoToAsync("//OverviewPage");
-
-        IsProgressVisible = false;
-        IsIndeterminate = false;
-        CanCancel = false;
-        CanPause = false;
-        IsPaused = false;
-        ProgressValue = 0;
-        StatusText = "Ready";
-        SubStatusText = "";
+        catch (Exception ex)
+        {
+            AppendProgress($"Execute failed: {ex.Message}");
+            StatusText = "Execute failed";
+            
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                await Application.Current?.MainPage?.DisplayAlert("Execution Error", $"Failed to execute plan: {ex.Message}", "OK")!;
+            });
+        }
+        finally
+        {
+            IsProgressVisible = false;
+            IsIndeterminate = false;
+            CanCancel = false;
+            CanPause = false;
+            IsPaused = false;
+            ProgressValue = 0;
+            StatusText = "Ready";
+            SubStatusText = "";
+        }
     }
 
     [RelayCommand]
@@ -288,15 +435,59 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     public void RemoveRoot(string path)
     {
-        if (SelectedRoots.Remove(path))
+        AppendProgress($"Attempting to remove root: {path}");
+        
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            AppendProgress("Cannot remove empty path");
+            return;
+        }
+
+        var removed = SelectedRoots.Remove(path);
+        AppendProgress($"Remove operation result: {removed}");
+        
+        if (removed)
         {
             SaveRoots();
             StatusText = $"Removed: {path}";
-            AppendProgress(StatusText);
+            AppendProgress($"Successfully removed and saved: {path}");
+            AppendProgress($"Remaining roots: {SelectedRoots.Count}");
+        }
+        else
+        {
+            AppendProgress($"Failed to remove: {path} (not found in collection)");
+            AppendProgress($"Current roots: {string.Join(", ", SelectedRoots)}");
         }
     }
 
     [RelayCommand] public void CancelOps() => _cts?.Cancel();
+
+    [RelayCommand]
+    public async Task RevertAsync()
+    {
+        if (LastSnapshot is null) return;
+
+        AppendProgress("Reverting changes…");
+        IsProgressVisible = true;
+        StatusText = "Reverting…";
+
+        try
+        {
+            var progress = new Progress<string>(msg => AppendProgress(msg));
+            await _executor.RevertAsync(LastSnapshot, progress, CancellationToken.None);
+            StatusText = "Reverted successfully";
+            AppendProgress("Revert completed.");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Revert failed: {ex.Message}";
+            AppendProgress($"Revert error: {ex.Message}");
+        }
+        finally
+        {
+            IsProgressVisible = false;
+        }
+    }
 
     [RelayCommand]
     public void PauseOps()
@@ -340,7 +531,9 @@ public partial class MainViewModel : ObservableObject
         MainThread.BeginInvokeOnMainThread(async () => // Use async for Task.Delay
         {
             IsProgressVisible = true;
-            IsIndeterminate = progress.Stage == JobStage.Estimating || progress.Stage == JobStage.Cancelling;
+
+            // Only show indeterminate spinner during cancelling - always show progress bar for other stages
+            IsIndeterminate = progress.Stage == JobStage.Cancelling;
 
             // Calculate OverallProgress based on stage weights
             double overallProgress = progress.Stage switch
@@ -387,7 +580,9 @@ public partial class MainViewModel : ObservableObject
         return progress.Stage switch
         {
             JobStage.Estimating => "Estimating files…",
-            JobStage.Scanning => $"Scanning {progress.FilesProcessed}/{progress.FilesTotal} files ({progress.StageProgress:P0})",
+            JobStage.Scanning => progress.FilesTotal > 0 && progress.FilesTotal < 40_000
+                ? $"Scanning {progress.FilesProcessed}/{progress.FilesTotal} files ({progress.StageProgress:P0})"
+                : $"Scanning {progress.FilesProcessed} files ({progress.StageProgress:P0})",
             JobStage.Planning => $"Building plan… ({progress.StageProgress:P0})",
             JobStage.Applying => $"Applying changes… ({progress.StageProgress:P0})",
             JobStage.Cancelling => "Cancelling…",
@@ -417,6 +612,9 @@ public partial class MainViewModel : ObservableObject
         // put each selected root as a top-level node in the tree
         foreach (var child in scanRoot.Children)
             CurrentRoot.Add(ToCurrentNode(child));
+
+        // Refresh the interactive tree view
+        RefreshTreeView();
     }
 
     private static CurrentTreeNode ToCurrentNode(FileNode n)
@@ -515,6 +713,69 @@ public partial class MainViewModel : ObservableObject
         catch { }
     }
 
+    private Plan CreateDefaultPlan(FileNode rootTree, string mode, string baseRoot)
+    {
+        var plan = new Plan { ScopeDescription = $"Default {mode} organization" };
+        var baseDir = Path.GetDirectoryName(baseRoot) ?? baseRoot;
+
+        // Define default organization folders
+        var organizationFolders = new Dictionary<string, string[]>
+        {
+            ["Images"] = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".svg", ".webp"],
+            ["Documents"] = [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"],
+            ["Spreadsheets"] = [".xls", ".xlsx", ".csv", ".ods"],
+            ["Presentations"] = [".ppt", ".pptx", ".odp"],
+            ["Archives"] = [".zip", ".rar", ".7z", ".tar", ".gz"],
+            ["Videos"] = [".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm"],
+            ["Audio"] = [".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma"],
+            ["Code"] = [".cs", ".js", ".ts", ".html", ".css", ".cpp", ".py", ".java"],
+            ["Executables"] = [".exe", ".msi", ".dmg", ".pkg", ".deb", ".rpm"]
+        };
+
+        // Organize files by type
+        OrganizeFilesByType(rootTree, plan.Moves, baseDir, organizationFolders);
+
+        return plan;
+    }
+
+    private void OrganizeFilesByType(FileNode node, List<MoveOp> moves, string baseDir, Dictionary<string, string[]> organizationFolders)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.IsDirectory)
+            {
+                OrganizeFilesByType(child, moves, baseDir, organizationFolders);
+            }
+            else
+            {
+                var extension = Path.GetExtension(child.Name).ToLowerInvariant();
+                var targetFolder = GetTargetFolderForExtension(extension, organizationFolders);
+
+                if (!string.IsNullOrEmpty(targetFolder))
+                {
+                    var destinationDir = Path.Combine(baseDir, "Organized", targetFolder);
+                    var destination = Path.Combine(destinationDir, child.Name);
+
+                    // Avoid moving files that are already in organized folders
+                    if (!child.Path.Contains("Organized", StringComparison.OrdinalIgnoreCase))
+                    {
+                        moves.Add(new MoveOp(child.Path, destination));
+                    }
+                }
+            }
+        }
+    }
+
+    private string GetTargetFolderForExtension(string extension, Dictionary<string, string[]> organizationFolders)
+    {
+        foreach (var folder in organizationFolders)
+        {
+            if (folder.Value.Contains(extension))
+                return folder.Key;
+        }
+        return "Other"; // Default folder for unrecognized file types
+    }
+
     partial void OnCurrentPlanChanged(Plan? value)
     {
         BuildPlanPreview();
@@ -608,5 +869,108 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    
+    private sealed class InteractiveTreeDrawable : IDrawable
+    {
+        private readonly IReadOnlyList<CurrentTreeNode> _rootNodes;
+        private readonly double _zoom;
+        private readonly double _panX;
+        private readonly double _panY;
+        private readonly MainViewModel _viewModel;
+        private const float NodeHeight = 24f;
+        private const float IndentWidth = 20f;
+        private const float IconSize = 16f;
+
+        public InteractiveTreeDrawable(IReadOnlyList<CurrentTreeNode> rootNodes, double zoom, double panX, double panY, MainViewModel viewModel)
+        {
+            _rootNodes = rootNodes;
+            _zoom = zoom;
+            _panX = panX;
+            _panY = panY;
+            _viewModel = viewModel;
+        }
+
+        public void Draw(ICanvas canvas, RectF dirtyRect)
+        {
+            canvas.Antialias = true;
+            canvas.SaveState();
+
+            // Apply zoom and pan transformations
+            canvas.Scale((float)_zoom, (float)_zoom);
+            canvas.Translate((float)_panX, (float)_panY);
+
+            if (_rootNodes?.Any() != true)
+            {
+                canvas.FontSize = 14;
+                canvas.FontColor = Colors.Gray;
+                canvas.DrawString("No files scanned yet. Click 'Desktop', 'Downloads', or 'Everything' to scan files.",
+                    new RectF(10, 10, dirtyRect.Width - 20, 100), HorizontalAlignment.Left, VerticalAlignment.Top);
+                canvas.RestoreState();
+                return;
+            }
+
+            float currentY = 10f;
+            foreach (var rootNode in _rootNodes)
+            {
+                currentY = DrawNode(canvas, rootNode, 0, currentY, dirtyRect.Width);
+            }
+
+            canvas.RestoreState();
+        }
+
+        private float DrawNode(ICanvas canvas, CurrentTreeNode node, int depth, float y, float maxWidth)
+        {
+            float x = 10f + (depth * IndentWidth);
+            var bounds = new RectF(x, y, maxWidth - x - 10f, NodeHeight);
+
+            // Draw background for hover/selection (simplified)
+            canvas.FillColor = Colors.Transparent;
+            canvas.FillRectangle(bounds);
+
+            // Draw expand/collapse icon for folders
+            if (node.IsFolder && node.Children.Any())
+            {
+                canvas.FontSize = 12;
+                canvas.FontColor = Colors.Gray;
+                var expandIcon = node.IsExpanded ? "▼" : "▶";
+                canvas.DrawString(expandIcon, new RectF(x, y + 4, IconSize, IconSize), HorizontalAlignment.Center, VerticalAlignment.Center);
+            }
+
+            // Draw file/folder icon
+            float iconX = x + (node.IsFolder && node.Children.Any() ? IconSize + 2 : 2);
+            canvas.FontSize = 14;
+            canvas.FontColor = Colors.Black;
+            var icon = node.IsFolder ? "📁" : "📄";
+            canvas.DrawString(icon, new RectF(iconX, y + 4, IconSize, IconSize), HorizontalAlignment.Center, VerticalAlignment.Center);
+
+            // Draw name
+            float textX = iconX + IconSize + 4;
+            canvas.FontSize = 13;
+            canvas.FontColor = node.IsFolder ? Color.FromRgb(46, 125, 50) : Color.FromRgb(21, 101, 192);
+            canvas.DrawString(node.Name, new RectF(textX, y + 4, maxWidth - textX - 50, NodeHeight - 8),
+                HorizontalAlignment.Left, VerticalAlignment.Center);
+
+            // Draw file count for folders
+            if (node.IsFolder && node.FileCount > 0)
+            {
+                canvas.FontSize = 11;
+                canvas.FontColor = Colors.Gray;
+                var countText = $"({node.FileCount} files)";
+                canvas.DrawString(countText, new RectF(maxWidth - 100, y + 4, 90, NodeHeight - 8),
+                    HorizontalAlignment.Right, VerticalAlignment.Center);
+            }
+
+            float nextY = y + NodeHeight;
+
+            // Draw children if expanded
+            if (node.IsFolder && node.IsExpanded && node.Children.Any())
+            {
+                foreach (var child in node.Children.Take(50)) // Limit visible children for performance
+                {
+                    nextY = DrawNode(canvas, child, depth + 1, nextY, maxWidth);
+                }
+            }
+
+            return nextY;
+        }
+    }
 }

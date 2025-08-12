@@ -32,8 +32,14 @@ public partial class OverviewPage : ContentPage
         {
             _data = new OverviewResult(new List<OverviewCategory>(), new OverviewNode("No Plan Available", new List<OverviewNode>()));
             _exampleFolderToOpen = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            // Optionally, display a message to the user or clear existing UI elements
-            // For now, the BuildDonut and BuildTree methods will handle the empty data.
+            
+            // Show a message to the user about the missing plan
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                await DisplayAlert("No Plan Available", 
+                    "No file organization plan is currently available. Please return to the main page and generate a plan by clicking 'Desktop', 'Downloads', or 'Everything'.", 
+                    "OK");
+            });
         }
         else
         {

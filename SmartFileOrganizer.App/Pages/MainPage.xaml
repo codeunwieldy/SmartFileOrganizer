@@ -38,24 +38,35 @@
 			</Grid>
 
 			<!-- Busy + status -->
-			<Grid ColumnDefinitions="*,*" ColumnSpacing="8" VerticalOptions="Center"
-                  IsVisible="{Binding IsProgressVisible}">
+			<VerticalStackLayout Spacing="8" IsVisible="{Binding IsProgressVisible}">
+				<!-- Current Mode Display -->
+				<Label Text="{Binding CurrentMode, StringFormat='Scanning: {0}'}" 
+                       FontAttributes="Bold" 
+                       FontSize="14"
+                       IsVisible="{Binding IsModeVisible}" />
+                       
+				<!-- Progress bars -->
+				<Grid>
+					<!-- determinate bar -->
+					<ProgressBar IsVisible="{Binding IsIndeterminate, Converter={StaticResource InverseBoolConverter}}"
+							 Progress="{Binding ProgressValue}"
+							 HeightRequest="20"
+							 BackgroundColor="LightGray"
+							 ProgressColor="#6B57B6"
+							 AutomationProperties.Name="File scan progress" />
 
-				<!-- determinate bar -->
-				<ProgressBar Grid.ColumnSpan="2"
-                             IsVisible="{Binding IsIndeterminate, Converter={StaticResource InverseBoolConverter}}"
-                             Progress="{Binding ProgressValue}"
-                             HeightRequest="6"
-                             AutomationProperties.Name="File scan progress" />
-
-				<!-- indeterminate spinner -->
-				<ActivityIndicator Grid.ColumnSpan="2"
-                                   IsVisible="{Binding IsIndeterminate}"
-                                   IsRunning="{Binding IsIndeterminate}" />
-
-				<Label Grid.Column="0" Text="{Binding StatusText}" LineBreakMode="TailTruncation" />
-				<Label Grid.Column="1" Text="{Binding SubStatusText}" LineBreakMode="TailTruncation" />
-			</Grid>
+					<!-- indeterminate spinner -->
+					<ActivityIndicator IsVisible="{Binding IsIndeterminate}"
+								   IsRunning="{Binding IsIndeterminate}"
+								   HeightRequest="30" />
+				</Grid>
+				
+				<!-- Status text -->
+				<Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+					<Label Grid.Column="0" Text="{Binding StatusText}" LineBreakMode="TailTruncation" />
+					<Label Grid.Column="1" Text="{Binding SubStatusText}" LineBreakMode="TailTruncation" />
+				</Grid>
+			</VerticalStackLayout>
 
 
 			<!-- Tiny console of recent progress lines -->
@@ -91,9 +102,9 @@
 
 			<!-- Selected roots chips -->
 			<FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center" Margin="0,8,0,0"
-                        BindableLayout.ItemsSource="{Binding SelectedRoots}">
+						BindableLayout.ItemsSource="{Binding SelectedRoots}">
 				<BindableLayout.ItemTemplate>
-					<DataTemplate>
+					<DataTemplate x:DataType="x:String">
 						<Border Padding="6" Margin="4" Background="#1A000000">
 							<Border.StrokeShape>
 								<RoundRectangle CornerRadius="12" />
@@ -101,9 +112,14 @@
 							<HorizontalStackLayout Spacing="6">
 								<Label Text="{Binding .}" LineBreakMode="TailTruncation" />
 								<Button Text="×"
-                                        Padding="0"
-                                        Command="{Binding Source={x:Reference MainRoot}, Path=BindingContext.RemoveRootCommand}"
-                                        CommandParameter="{Binding .}" />
+										Padding="4"
+										MinimumWidthRequest="20"
+										MinimumHeightRequest="20"
+										FontSize="14"
+										BackgroundColor="Transparent"
+										TextColor="Red"
+										Command="{Binding Source={x:Reference MainRoot}, Path=BindingContext.RemoveRootCommand}"
+										CommandParameter="{Binding .}" />
 							</HorizontalStackLayout>
 						</Border>
 					</DataTemplate>
@@ -144,7 +160,6 @@
 				<VerticalStackLayout Spacing="6">
 					<Label Text="Visual Overview (destinations in current plan)" FontAttributes="Bold" />
 					<GraphicsView HeightRequest="180" Drawable="{Binding PlanPreviewDrawable}" />
-					<Label Text="(Updates after you Generate Plan.)" FontSize="12" />
 				</VerticalStackLayout>
 			</Border>
 
@@ -154,9 +169,50 @@
 					<RoundRectangle CornerRadius="8" />
 				</Border.StrokeShape>
 				<VerticalStackLayout Spacing="6">
-					<Label Text="Scan Preview (Current File Tree)" FontAttributes="Bold" />
+					<Label Text="Interactive File System Browser" FontAttributes="Bold" />
 					<Label Text="{Binding CurrentBreadcrumb}" FontSize="12" LineBreakMode="TailTruncation" />
-					<ctrls:CurrentTreeView HeightRequest="420" />
+					
+					<!-- Interactive file tree with zoom and pan using GraphicsView -->
+					<Border Stroke="#22000000" StrokeThickness="1" BackgroundColor="#FAFAFA">
+						<Border.StrokeShape>
+							<RoundRectangle CornerRadius="4" />
+						</Border.StrokeShape>
+						<ScrollView Orientation="Both" 
+								   HeightRequest="600">
+							<GraphicsView x:Name="InteractiveTreeView" 
+										  Drawable="{Binding TreeDrawable}"
+										  HeightRequest="800"
+										  WidthRequest="1200"
+										  BackgroundColor="White">
+								<GraphicsView.GestureRecognizers>
+									<TapGestureRecognizer Tapped="OnTreeTapped" />
+									<PanGestureRecognizer PanUpdated="OnTreePanned" />
+									<PinchGestureRecognizer PinchUpdated="OnTreePinched" />
+								</GraphicsView.GestureRecognizers>
+							</GraphicsView>
+						</ScrollView>
+					</Border>
+					
+					<!-- Tree navigation controls -->
+					<HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
+						<Button Text="🔍 Zoom In" 
+								Clicked="OnZoomIn"
+								FontSize="12"
+								Padding="8,4" />
+						<Button Text="🔍 Zoom Out" 
+								Clicked="OnZoomOut"
+								FontSize="12"
+								Padding="8,4" />
+						<Button Text="🔄 Reset View" 
+								Clicked="OnResetZoom"
+								FontSize="12"
+								Padding="8,4" />
+						<Button Text="📁 Refresh Tree" 
+								Command="{Binding GeneratePlanCommand}"
+								CommandParameter="refresh"
+								FontSize="12"
+								Padding="8,4" />
+					</HorizontalStackLayout>
 				</VerticalStackLayout>
 			</Border>
 

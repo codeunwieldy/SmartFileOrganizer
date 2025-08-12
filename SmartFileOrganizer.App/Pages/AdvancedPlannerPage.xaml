@@ -5,18 +5,138 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:ctrls="clr-namespace:SmartFileOrganizer.App.Pages.Controls"
     Title="Advanced Planner">
-	<Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,*" Padding="16" ColumnSpacing="16" RowSpacing="8">
-		<Label Grid.ColumnSpan="2" Text="Drag files from your current structure (left) onto destination folders (right)." />
-		<VerticalStackLayout Grid.Row="1" Grid.Column="0" Spacing="6">
-			<Label Text="Current selection:" FontAttributes="Bold" />
-			<Label Text="{Binding CurrentBreadcrumb}" FontSize="12" LineBreakMode="TailTruncation" />
-			<ctrls:CurrentTreeView />
-		</VerticalStackLayout>
-		<VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="6">
-			<Label Text="Destination selection:" FontAttributes="Bold" />
-			<Label Text="{Binding DestinationBreadcrumb}" FontSize="12" LineBreakMode="TailTruncation" />
-			<ctrls:PlanTreeView />
-		</VerticalStackLayout>
-		<Button Grid.Row="2" Grid.ColumnSpan="2" Text="Save &amp; Close" Clicked="OnSave" />
-	</Grid>
+
+    <ScrollView>
+        <Grid RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="*,*" Padding="16" ColumnSpacing="16" RowSpacing="12">
+            
+            <!-- Header with instructions -->
+            <Border Grid.ColumnSpan="2" Grid.Row="0" Padding="12" BackgroundColor="#E3F2FD" Stroke="#2196F3" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="8" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="📋 Advanced Plan Editor" FontAttributes="Bold" FontSize="18" TextColor="#1976D2" />
+                    <Label Text="• Drag files from current structure (left) to destination folders (right)" FontSize="12" />
+                    <Label Text="• Create new folders by typing names and clicking '+ New Folder'" FontSize="12" />
+                    <Label Text="• Preview shows how files will be organized after execution" FontSize="12" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Quick Actions Bar -->
+            <HorizontalStackLayout Grid.ColumnSpan="2" Grid.Row="1" Spacing="10" HorizontalOptions="Center">
+                <Button Text="📁 Create Documents Folder" 
+                        Clicked="OnCreateDocumentsFolder"
+                        FontSize="12" Padding="8,4" />
+                <Button Text="🖼️ Create Images Folder" 
+                        Clicked="OnCreateImagesFolder"
+                        FontSize="12" Padding="8,4" />
+                <Button Text="🎵 Create Media Folder" 
+                        Clicked="OnCreateMediaFolder"
+                        FontSize="12" Padding="8,4" />
+                <Button Text="📦 Create Archive Folder" 
+                        Clicked="OnCreateArchiveFolder"
+                        FontSize="12" Padding="8,4" />
+                <Button Text="🗑️ Clear All Moves" 
+                        Clicked="OnClearAllMoves"
+                        FontSize="12" Padding="8,4" />
+            </HorizontalStackLayout>
+
+            <!-- Main content area with tree views -->
+            <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
+                
+                <!-- Current Structure (Left Panel) -->
+                <Border Grid.Column="0" Stroke="#CCCCCC" StrokeThickness="1" BackgroundColor="#FAFAFA">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="8" />
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="6" Padding="8">
+                        <Label Text="📂 Current File Structure" FontAttributes="Bold" FontSize="14" />
+                        <Label Text="{Binding CurrentBreadcrumb}" FontSize="11" LineBreakMode="TailTruncation" 
+                               TextColor="Gray" Margin="0,0,0,4" />
+                        <ScrollView HeightRequest="500">
+                            <ctrls:CurrentTreeView />
+                        </ScrollView>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Center separator with arrows -->
+                <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="10">
+                    <Label Text="➡️" FontSize="20" HorizontalOptions="Center" />
+                    <Label Text="Drag" FontSize="10" FontAttributes="Bold" HorizontalOptions="Center" />
+                    <Label Text="⬅️" FontSize="20" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+
+                <!-- Destination Structure (Right Panel) -->
+                <Border Grid.Column="2" Stroke="#CCCCCC" StrokeThickness="1" BackgroundColor="#F0F8E8">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="8" />
+                    </Border.StrokeShape>
+                    <VerticalStackLayout Spacing="6" Padding="8">
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="🎯 Planned Destination" FontAttributes="Bold" FontSize="14" />
+                            <Label Text="{Binding DestinationRoot.Count, StringFormat='({0} folders)'}" FontSize="11" TextColor="Gray" />
+                        </HorizontalStackLayout>
+                        <Label Text="{Binding DestinationBreadcrumb}" FontSize="11" LineBreakMode="TailTruncation" 
+                               TextColor="Gray" Margin="0,0,0,4" />
+                        
+                        <!-- New folder creation -->
+                        <HorizontalStackLayout Spacing="4" Margin="0,4">
+                            <Entry x:Name="NewFolderEntry" Placeholder="New folder name" WidthRequest="150" FontSize="12" />
+                            <Button Text="+ New Folder" Clicked="OnCreateNewFolder" FontSize="11" Padding="6,4" />
+                        </HorizontalStackLayout>
+                        
+                        <ScrollView HeightRequest="500">
+                            <ctrls:PlanTreeView />
+                        </ScrollView>
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <!-- Plan Summary and Actions -->
+            <Border Grid.Row="3" Grid.ColumnSpan="2" Padding="12" BackgroundColor="#FFF3E0" Stroke="#FF9800" StrokeThickness="1">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="8" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="📊 Plan Summary" FontAttributes="Bold" FontSize="16" TextColor="#F57C00" />
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                        <VerticalStackLayout Grid.Column="0">
+                            <Label Text="File Moves" FontAttributes="Bold" FontSize="12" />
+                            <Label x:Name="MovesCountLabel" Text="0 planned moves" FontSize="11" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1">
+                            <Label Text="New Folders" FontAttributes="Bold" FontSize="12" />
+                            <Label x:Name="FoldersCountLabel" Text="0 new folders" FontSize="11" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="2">
+                            <Label Text="Status" FontAttributes="Bold" FontSize="12" />
+                            <Label x:Name="StatusLabel" Text="Ready to save" FontSize="11" />
+                        </VerticalStackLayout>
+                    </Grid>
+                    
+                    <!-- Action buttons -->
+                    <HorizontalStackLayout Spacing="12" HorizontalOptions="Center" Margin="0,8,0,0">
+                        <Button Text="💾 Save Plan" 
+                                Clicked="OnSave" 
+                                BackgroundColor="#4CAF50" 
+                                TextColor="White"
+                                FontSize="14" 
+                                Padding="12,8" />
+                        <Button Text="👁️ Preview Changes" 
+                                Clicked="OnPreviewChanges"
+                                BackgroundColor="#2196F3" 
+                                TextColor="White"
+                                FontSize="14" 
+                                Padding="12,8" />
+                        <Button Text="❌ Cancel" 
+                                Clicked="OnCancel"
+                                BackgroundColor="#F44336" 
+                                TextColor="White"
+                                FontSize="14" 
+                                Padding="12,8" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+    </ScrollView>
 </ContentPage>

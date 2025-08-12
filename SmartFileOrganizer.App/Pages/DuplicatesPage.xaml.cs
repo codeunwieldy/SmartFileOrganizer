@@ -23,8 +23,8 @@ public partial class DuplicatesPage : ContentPage
     // === Per-group VM for display ===
     public class GroupVM
     {
-        public string Header { get; init; }
-        public ObservableCollection<string> Items { get; init; }
+        public required string Header { get; init; }
+        public required ObservableCollection<string> Items { get; init; }
         public string? Kept { get; set; }
     }
 
@@ -44,21 +44,9 @@ public partial class DuplicatesPage : ContentPage
 
         _folderPicker = Application.Current?.Handler?.MauiContext?.Services?.GetService<IFolderPicker>();
 
-        // summary text
-        var reclaim = groups.Sum(g => ((long)g.Paths.Count - 1) * g.SizeBytes);
-        Summary.Text = $"{groups.Count()} groups • Potential reclaim: ~{reclaim / (1024 * 1024)} MB";
+        InitializeDuplicateGroups(groups);
 
-        // materialize groups
-        foreach (var g in groups)
-        {
-            ViewGroups.Add(new GroupVM
-            {
-                Header = $"{g.Paths.Count} × {g.SizeBytes / 1024} KB — {g.Hash[..8]}…",
-                Items = new ObservableCollection<string>(g.Paths)
-            });
-        }
-
-        // “Keep here” command
+        // "Keep here" command
         MarkKeepHereCommand = new AsyncRelayCommand<string>(async path =>
         {
             var group = ViewGroups.FirstOrDefault(v => v.Items.Contains(path!));
@@ -68,6 +56,47 @@ public partial class DuplicatesPage : ContentPage
                 await DisplayAlert("Marked", $"Keeping: {path}", "OK");
             }
         });
+    }
+
+    // Parameterless constructor for Shell navigation
+    public DuplicatesPage()
+    {
+        InitializeComponent();
+        BindingContext = this;
+
+        _folderPicker = Application.Current?.Handler?.MauiContext?.Services?.GetService<IFolderPicker>();
+
+        // "Keep here" command
+        MarkKeepHereCommand = new AsyncRelayCommand<string>(async path =>
+        {
+            var group = ViewGroups.FirstOrDefault(v => v.Items.Contains(path!));
+            if (group is not null)
+            {
+                group.Kept = path;
+                await DisplayAlert("Marked", $"Keeping: {path}", "OK");
+            }
+        });
+    }
+
+    public void InitializeDuplicateGroups(IEnumerable<DuplicateGroup> groups)
+    {
+        // summary text
+        var reclaim = groups.Sum(g => ((long)g.Paths.Count - 1) * g.SizeBytes);
+        if (Summary != null)
+        {
+            Summary.Text = $"{groups.Count()} groups • Potential reclaim: ~{reclaim / (1024 * 1024)} MB";
+        }
+
+        // materialize groups
+        ViewGroups.Clear();
+        foreach (var g in groups)
+        {
+            ViewGroups.Add(new GroupVM
+            {
+                Header = $"{g.Paths.Count} × {g.SizeBytes / 1024} KB — {g.Hash[..8]}…",
+                Items = new ObservableCollection<string>(g.Paths)
+            });
+        }
     }
 
     private async void OnPickArchive(object sender, EventArgs e)
